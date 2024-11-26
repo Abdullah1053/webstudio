@@ -6,7 +6,7 @@ services:
     privileged: true
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: .devcontainer/Dockerfile
 
     volumes:
       - ..:/workspaces/webstudio:cached
