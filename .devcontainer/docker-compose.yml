@@ -9,7 +9,7 @@ services:
       dockerfile: .devcontainer/Dockerfile
 
     volumes:
-      - .:/workspaces/webstudio:cached
+      - .:/workspaces/webstudio
       # preserve history
       - ./.local:/home/node/.local
       - docker-data:/var/lib/docker
