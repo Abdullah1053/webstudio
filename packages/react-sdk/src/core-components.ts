@@ -3,7 +3,7 @@ import {
   ListViewIcon,
   PaintBrushIcon,
   SettingsIcon,
-  TriggerIcon,
+  AddTemplateInstanceIcon,
 } from "@webstudio-is/icons/svg";
 import { html } from "@webstudio-is/sdk/normalize.css";
 import type {
@@ -94,7 +94,10 @@ const descendantMeta: WsComponentMeta = {
   type: "control",
   label: "Descendant",
   icon: PaintBrushIcon,
-  detachable: false,
+  constraints: {
+    relation: "parent",
+    component: { $in: ["HtmlEmbed", "MarkdownEmbed"] },
+  },
 };
 
 const descendantPropsMeta: WsComponentPropsMeta = {
@@ -126,48 +129,183 @@ const descendantPropsMeta: WsComponentPropsMeta = {
   initialProps: ["selector"],
 };
 
-export const editableBlockTemplateComponent = "ws:editable-block-template";
+export const blockComponent = "ws:block";
 
-export const editableBlockTemplateMeta: WsComponentMeta = {
+export const blockTemplateComponent = "ws:block-template";
+
+export const blockTemplateMeta: WsComponentMeta = {
   category: "hidden",
-  detachable: false,
   type: "container",
-  icon: TriggerIcon,
+  icon: AddTemplateInstanceIcon,
   stylable: false,
+  constraints: {
+    relation: "parent",
+    component: { $eq: blockComponent },
+  },
 };
 
-const editableBlockTemplatePropsMeta: WsComponentPropsMeta = {
+const blockTemplatePropsMeta: WsComponentPropsMeta = {
   props: {},
   initialProps: [],
 };
 
-export const editableBlockComponent = "ws:editable-block";
-
-const editableBlockMeta: WsComponentMeta = {
+const blockMeta: WsComponentMeta = {
   category: "data",
   order: 2,
   type: "container",
-  label: "Editable Block",
+  label: "Content Block",
   icon: EditIcon,
+  constraints: [
+    {
+      relation: "ancestor",
+      component: { $nin: [collectionComponent, blockComponent] },
+    },
+    {
+      relation: "child",
+      component: { $eq: blockTemplateComponent },
+    },
+  ],
   stylable: false,
   template: [
     {
       type: "instance",
-      component: editableBlockComponent,
+      component: blockComponent,
       props: [],
       children: [
         {
           type: "instance",
           label: "Templates",
-          component: editableBlockTemplateComponent,
-          children: [],
+          component: blockTemplateComponent,
+          children: [
+            {
+              type: "instance",
+              component: "Paragraph",
+              children: [
+                {
+                  type: "text",
+                  value: "Paragraph text you can edit",
+                  placeholder: true,
+                },
+              ],
+            },
+            {
+              type: "instance",
+              component: "List",
+              children: [
+                {
+                  type: "instance",
+                  component: "ListItem",
+                  children: [
+                    {
+                      type: "text",
+                      value: "List Item text you can edit",
+                      placeholder: true,
+                    },
+                  ],
+                },
+                {
+                  type: "instance",
+                  component: "ListItem",
+                  children: [
+                    {
+                      type: "text",
+                      value: "List Item text you can edit",
+                      placeholder: true,
+                    },
+                  ],
+                },
+                {
+                  type: "instance",
+                  component: "ListItem",
+                  children: [
+                    {
+                      type: "text",
+                      value: "List Item text you can edit",
+                      placeholder: true,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          type: "instance",
+          component: "Paragraph",
+          children: [
+            {
+              type: "text",
+              value:
+                "The Content Block component designates regions on the page where pre-styled instances can be inserted in ",
+            },
+            {
+              type: "instance",
+              component: "RichTextLink",
+              children: [
+                {
+                  type: "text",
+                  value: "Content mode",
+                },
+              ],
+              props: [
+                {
+                  type: "string",
+                  name: "href",
+                  value: "https://wstd.us/content-block",
+                },
+              ],
+            },
+            {
+              type: "text",
+              value: ".",
+            },
+          ],
+        },
+        {
+          type: "instance",
+          component: "List",
+          children: [
+            {
+              type: "instance",
+              component: "ListItem",
+              children: [
+                {
+                  type: "text",
+                  value:
+                    "In Content mode, you can edit any direct child instances that were pre-added to the Content Block, as well as add new instances predefined in Templates.",
+                },
+              ],
+            },
+            {
+              type: "instance",
+              component: "ListItem",
+              children: [
+                {
+                  type: "text",
+                  value:
+                    "To predefine instances for insertion in Content mode, switch to Design mode and add them to the Templates container.",
+                },
+              ],
+            },
+            {
+              type: "instance",
+              component: "ListItem",
+              children: [
+                {
+                  type: "text",
+                  value:
+                    "To insert predefined instances in Content mode, click the + button while hovering over the Content Block on the canvas and choose an instance from the list.",
+                },
+              ],
+            },
+          ],
         },
       ],
     },
   ],
 };
 
-const editableBlockPropsMeta: WsComponentPropsMeta = {
+const blockPropsMeta: WsComponentPropsMeta = {
   props: {},
   initialProps: [],
 };
@@ -176,16 +314,16 @@ export const coreMetas = {
   [rootComponent]: rootMeta,
   [collectionComponent]: collectionMeta,
   [descendantComponent]: descendantMeta,
-  [editableBlockComponent]: editableBlockMeta,
-  [editableBlockTemplateComponent]: editableBlockTemplateMeta,
+  [blockComponent]: blockMeta,
+  [blockTemplateComponent]: blockTemplateMeta,
 };
 
 export const corePropsMetas = {
   [rootComponent]: rootPropsMeta,
   [collectionComponent]: collectionPropsMeta,
   [descendantComponent]: descendantPropsMeta,
-  [editableBlockComponent]: editableBlockPropsMeta,
-  [editableBlockTemplateComponent]: editableBlockTemplatePropsMeta,
+  [blockComponent]: blockPropsMeta,
+  [blockTemplateComponent]: blockTemplatePropsMeta,
 };
 
 // components with custom implementation
@@ -194,5 +332,5 @@ export const isCoreComponent = (component: string) =>
   component === rootComponent ||
   component === collectionComponent ||
   component === descendantComponent ||
-  component === editableBlockComponent ||
-  component === editableBlockTemplateComponent;
+  component === blockComponent ||
+  component === blockTemplateComponent;

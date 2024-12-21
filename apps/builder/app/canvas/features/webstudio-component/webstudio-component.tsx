@@ -7,6 +7,7 @@ import {
   useMemo,
   Fragment,
   type ReactNode,
+  type JSX,
 } from "react";
 import { $getSelection, $isRangeSelection } from "lexical";
 import { computed } from "nanostores";
@@ -26,8 +27,8 @@ import {
   type AnyComponent,
   textContentAttribute,
   descendantComponent,
-  editableBlockComponent,
-  editableBlockTemplateComponent,
+  blockComponent,
+  blockTemplateComponent,
 } from "@webstudio-is/react-sdk";
 import { rawTheme } from "@webstudio-is/design-system";
 import {
@@ -46,13 +47,17 @@ import { setDataCollapsed } from "~/canvas/collapsed";
 import { getIsVisuallyHidden } from "~/shared/visually-hidden";
 import { serverSyncStore } from "~/shared/sync";
 import { TextEditor } from "../text-editor";
-import { $selectedPage, selectInstance } from "~/shared/awareness";
+import {
+  $selectedPage,
+  getInstanceKey,
+  selectInstance,
+} from "~/shared/awareness";
 import {
   createInstanceChildrenElements,
   type WebstudioComponentProps,
 } from "~/canvas/elements";
-import { EditableBlock } from "../build-mode/editable-block";
-import { EditableBlockTemplate } from "../build-mode/editable-block-template";
+import { Block } from "../build-mode/block";
+import { BlockTemplate } from "../build-mode/block-template";
 
 const ContentEditable = ({
   renderComponentWithRef,
@@ -250,7 +255,7 @@ const $indexesWithinAncestors = computed(
 );
 
 const useInstanceProps = (instanceSelector: InstanceSelector) => {
-  const instanceSelectorKey = JSON.stringify(instanceSelector);
+  const instanceKey = getInstanceKey(instanceSelector);
   const [instanceId] = instanceSelector;
   const $instancePropsObject = useMemo(() => {
     return computed(
@@ -261,8 +266,7 @@ const useInstanceProps = (instanceSelector: InstanceSelector) => {
         if (index !== undefined) {
           instancePropsObject[indexAttribute] = index.toString();
         }
-        const instanceProps =
-          propValuesByInstanceSelector.get(instanceSelectorKey);
+        const instanceProps = propValuesByInstanceSelector.get(instanceKey);
         if (instanceProps) {
           for (const [name, value] of instanceProps) {
             instancePropsObject[name] = value;
@@ -271,7 +275,7 @@ const useInstanceProps = (instanceSelector: InstanceSelector) => {
         return instancePropsObject;
       }
     );
-  }, [instanceSelectorKey, instanceId]);
+  }, [instanceKey, instanceId]);
   const instancePropsObject = useStore($instancePropsObject);
   return instancePropsObject;
 };
@@ -432,17 +436,18 @@ export const WebstudioComponentCanvas = forwardRef<
     return <></>;
   }
 
-  if (instance.component === editableBlockComponent) {
-    Component = EditableBlock;
+  if (instance.component === blockComponent) {
+    Component = Block;
   }
 
-  if (instance.component === editableBlockTemplateComponent) {
-    Component = EditableBlockTemplate;
+  if (instance.component === blockTemplateComponent) {
+    Component = BlockTemplate;
   }
 
   const props: {
     [componentAttribute]: string;
     [idAttribute]: string;
+    [selectorIdAttribute]: string;
   } & Record<string, unknown> = {
     ...mergeProps(restProps, instanceProps, "delete"),
     // current props should override bypassed from parent
@@ -527,6 +532,7 @@ export const WebstudioComponentPreview = forwardRef<
     ...mergeProps(restProps, instanceProps, "merge"),
     [idAttribute]: instance.id,
     [componentAttribute]: instance.component,
+    [selectorIdAttribute]: instanceSelector.join(","),
   };
   if (show === false) {
     return <></>;
@@ -564,7 +570,16 @@ export const WebstudioComponentPreview = forwardRef<
     return <></>;
   }
 
-  const Component = components.get(instance.component);
+  let Component = components.get(instance.component);
+
+  if (instance.component === blockComponent) {
+    Component = Block;
+  }
+
+  if (instance.component === blockTemplateComponent) {
+    Component = BlockTemplate;
+  }
+
   if (Component === undefined) {
     return <></>;
   }

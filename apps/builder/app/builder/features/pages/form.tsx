@@ -1,12 +1,12 @@
-export const Form = ({
-  onSubmit,
-  children,
-}: {
-  onSubmit: () => void;
-  children: JSX.Element;
-}) => {
+import { forwardRef, type ReactNode } from "react";
+
+export const Form = forwardRef<
+  HTMLFormElement,
+  { onSubmit: () => void; children: ReactNode }
+>(({ onSubmit, children }, ref) => {
   return (
     <form
+      ref={ref}
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();
@@ -17,4 +17,4 @@ export const Form = ({
       <input type="submit" hidden />
     </form>
   );
-};
+});

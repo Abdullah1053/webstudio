@@ -20,9 +20,9 @@ import {
   ToggleGroupButton,
   Separator,
   styled,
+  FloatingPanelProvider,
 } from "@webstudio-is/design-system";
 import { ImageControl, SelectControl } from "../../controls";
-import { FloatingPanelProvider } from "~/builder/shared/floating-panel";
 import { BackgroundSize } from "./background-size";
 import { BackgroundGradient } from "./background-gradient";
 import { BackgroundImage } from "./background-image";
@@ -181,10 +181,10 @@ export const BackgroundContent = ({ index }: { index: number }) => {
           https://github.com/radix-ui/primitives/issues/1910
           */}
             <ToggleGroupButton value={"image"} autoFocus={true}>
-              <Flex css={{ px: theme.spacing[2] }}>Image</Flex>
+              <Flex css={{ px: theme.spacing[3] }}>Image</Flex>
             </ToggleGroupButton>
             <ToggleGroupButton value={"gradient"}>
-              <Flex css={{ px: theme.spacing[2] }}>Gradient</Flex>
+              <Flex css={{ px: theme.spacing[3] }}>Gradient</Flex>
             </ToggleGroupButton>
           </ToggleGroup>
         </Flex>

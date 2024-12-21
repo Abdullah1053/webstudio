@@ -1,10 +1,11 @@
 import { idAttribute } from "@webstudio-is/react-sdk";
 import {
-  $editableBlockChildOutline,
+  $blockChildOutline,
   $hoveredInstanceSelector,
   $instances,
+  $selectedInstanceSelector,
   $textEditingInstanceSelector,
-  findEditableBlockChildSelector,
+  findBlockChildSelector,
 } from "~/shared/nano-states";
 import { $hoveredInstanceOutline } from "~/shared/nano-states";
 import {
@@ -13,16 +14,9 @@ import {
   getInstanceSelectorFromElement,
 } from "~/shared/dom-utils";
 import { subscribeScrollState } from "./shared/scroll-state";
-import type { InstanceSelector } from "~/shared/tree-utils";
+import { isDescendantOrSelf, type InstanceSelector } from "~/shared/tree-utils";
 
 type TimeoutId = undefined | ReturnType<typeof setTimeout>;
-
-const isDescendantOrSelf = (
-  descendant: InstanceSelector,
-  self: InstanceSelector
-) => {
-  return descendant.join(",").endsWith(self.join(","));
-};
 
 export const subscribeInstanceHovering = ({
   signal,
@@ -52,40 +46,46 @@ export const subscribeInstanceHovering = ({
     },
     eventOptions
   );
-  window.addEventListener(
-    "mousemove",
-    () => {
-      // We want the hover outline to appear only if a mouse or trackpad action caused it, not from keyboard navigation.
-      // Otherwise, when we leave the Lexical editor using the keyboard,
-      // the mouseover event triggers on elements created after Lexical loses focus.
-      // This causes an outline to appear on the element under the now-invisible mouse pointer
-      // (as the browser hides the pointer on blur), creating some visual distraction.
-      if (hoveredElement !== undefined) {
-        const instanceSelector = getInstanceSelectorFromElement(hoveredElement);
-        if (instanceSelector) {
-          if (updateOnMouseMove) {
-            $hoveredInstanceSelector.set(instanceSelector);
-            updateEditableChildOutline(instanceSelector);
-          } else {
-            const textSelector = $textEditingInstanceSelector.get()?.selector;
 
-            // We need to update the editable child's outline even if the mouseover event is not triggered.
-            // This can happen if the user enters text editing mode, presses any key, and then moves the mouse.
-            // In this case, the mouseover event does not occur, but we still need to show the editable child's outline.
-            if (
-              textSelector &&
-              isDescendantOrSelf(instanceSelector, textSelector) && // optimisation
-              $editableBlockChildOutline.get() === undefined
-            ) {
-              updateEditableChildOutline(instanceSelector);
-            }
+  const updateEditableOutline = () => {
+    // We want the hover outline to appear only if a mouse or trackpad action caused it, not from keyboard navigation.
+    // Otherwise, when we leave the Lexical editor using the keyboard,
+    // the mouseover event triggers on elements created after Lexical loses focus.
+    // This causes an outline to appear on the element under the now-invisible mouse pointer
+    // (as the browser hides the pointer on blur), creating some visual distraction.
+    if (hoveredElement !== undefined) {
+      const instanceSelector = getInstanceSelectorFromElement(hoveredElement);
+      if (instanceSelector) {
+        if (updateOnMouseMove) {
+          $hoveredInstanceSelector.set(instanceSelector);
+          updateEditableChildOutline(instanceSelector);
+        } else {
+          const textSelector = $textEditingInstanceSelector.get()?.selector;
+
+          // We need to update the editable child's outline even if the mouseover event is not triggered.
+          // This can happen if the user enters text editing mode, presses any key, and then moves the mouse.
+          // In this case, the mouseover event does not occur, but we still need to show the editable child's outline.
+          if (
+            textSelector &&
+            isDescendantOrSelf(instanceSelector, textSelector) && // optimisation
+            $blockChildOutline.get() === undefined
+          ) {
+            updateEditableChildOutline(instanceSelector);
           }
         }
       }
-      updateOnMouseMove = false;
-    },
-    eventOptions
+    }
+    updateOnMouseMove = false;
+  };
+
+  const unsubscribeTextEditingInstance = $textEditingInstanceSelector.listen(
+    () => {
+      // Fixes the bug if initial editable instance is empty and has collapsed paddings
+      setTimeout(updateEditableOutline, 0);
+    }
   );
+
+  window.addEventListener("mousemove", updateEditableOutline, eventOptions);
 
   window.addEventListener(
     "mouseout",
@@ -94,7 +94,7 @@ export const subscribeInstanceHovering = ({
         updateOnMouseMove = false;
         hoveredElement = undefined;
 
-        $editableBlockChildOutline.set(undefined);
+        $blockChildOutline.set(undefined);
         $hoveredInstanceSelector.set(undefined);
         $hoveredInstanceOutline.set(undefined);
       }, 100);
@@ -117,29 +117,25 @@ export const subscribeInstanceHovering = ({
       return;
     }
 
-    const editableBlockChildSelector =
-      findEditableBlockChildSelector(instanceSelector);
+    const blockChildSelector = findBlockChildSelector(instanceSelector);
 
-    if (editableBlockChildSelector === undefined) {
-      $editableBlockChildOutline.set(undefined);
+    if (blockChildSelector === undefined) {
+      $blockChildOutline.set(undefined);
       return;
     }
 
-    const editableBlockChildElements = getVisibleElementsByInstanceSelector(
-      editableBlockChildSelector
-    );
-    const editableBlockChildRect = getAllElementsBoundingBox(
-      editableBlockChildElements
-    );
+    const blockChildElements =
+      getVisibleElementsByInstanceSelector(blockChildSelector);
+    const blockChildRect = getAllElementsBoundingBox(blockChildElements);
 
-    if (editableBlockChildRect === undefined) {
-      $editableBlockChildOutline.set(undefined);
+    if (blockChildRect === undefined) {
+      $blockChildOutline.set(undefined);
       return;
     }
 
-    $editableBlockChildOutline.set({
-      selector: editableBlockChildSelector,
-      rect: editableBlockChildRect,
+    $blockChildOutline.set({
+      selector: blockChildSelector,
+      rect: blockChildRect,
     });
   };
 
@@ -177,7 +173,7 @@ export const subscribeInstanceHovering = ({
     onScrollStart() {
       isScrolling = true;
       $hoveredInstanceOutline.set(undefined);
-      $editableBlockChildOutline.set(undefined);
+      $blockChildOutline.set(undefined);
     },
     onScrollEnd() {
       isScrolling = false;
@@ -204,9 +200,22 @@ export const subscribeInstanceHovering = ({
     }
   );
 
+  // selected instance selection can change hovered instance outlines (example Block/Template/Child)
+  const usubscribeSelectedInstanceSelector =
+    $selectedInstanceSelector.subscribe(() => {
+      const instanceSelector = $hoveredInstanceSelector.get();
+      if (instanceSelector) {
+        updateHoveredRect(instanceSelector);
+      } else {
+        $hoveredInstanceOutline.set(undefined);
+      }
+    });
+
   signal.addEventListener("abort", () => {
     unsubscribeScrollState();
     clearTimeout(mouseOutTimeoutId);
     unsubscribeHoveredInstanceId();
+    usubscribeSelectedInstanceSelector();
+    unsubscribeTextEditingInstance();
   });
 };

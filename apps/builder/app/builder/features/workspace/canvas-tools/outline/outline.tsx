@@ -40,6 +40,27 @@ const baseOutlineStyle = css({
         borderColor: theme.colors.foregroundReusable,
       },
     },
+
+    isLeftClamped: {
+      true: {
+        borderLeftWidth: 0,
+      },
+    },
+    isRightClamped: {
+      true: {
+        borderRightWidth: 0,
+      },
+    },
+    isBottomClamped: {
+      true: {
+        borderBottomWidth: 0,
+      },
+    },
+    isTopClamped: {
+      true: {
+        borderTopWidth: 0,
+      },
+    },
   },
   defaultVariants: { variant: "default" },
 });
@@ -68,52 +89,45 @@ const useDynamicStyle = (rect?: Rect) => {
 
 type OutlineProps = {
   children?: ReactNode;
-  rect?: Rect;
+  rect: Rect;
+  clampingRect: Rect;
   variant?: "default" | "collaboration" | "slot";
 };
 
-export const EditableBlockChildAddButtonOutline = ({
-  rect,
+export const Outline = ({
   children,
-}: {
-  rect: Rect;
-  children: ReactNode;
-}) => {
-  const dynamicStyle = useDynamicStyle(rect);
+  rect,
+  clampingRect,
+  variant,
+}: OutlineProps) => {
+  const outlineRect = {
+    top: Math.max(rect.top, clampingRect.top),
+    height:
+      Math.min(rect.top + rect.height, clampingRect.top + clampingRect.height) -
+      Math.max(rect.top, clampingRect.top),
 
-  return (
-    <>
-      <div
-        className={`${baseStyle()} ${baseOutlineStyle()}`}
-        style={dynamicStyle}
-      >
-        <div
-          style={{
-            height: 0,
-            width: 0,
-            display: "grid",
-            alignContent: "center",
-            justifyContent: "center",
+    left: Math.max(rect.left, clampingRect.left),
+    width:
+      Math.min(rect.left + rect.width, clampingRect.left + clampingRect.width) -
+      Math.max(rect.left, clampingRect.left),
+  };
 
-            justifySelf: "start",
-            alignSelf: "start",
-          }}
-        >
-          {children}
-        </div>
-      </div>
-    </>
-  );
-};
+  const isLeftClamped = rect.left < outlineRect.left;
+  const isTopClamped = rect.top < outlineRect.top;
 
-export const Outline = ({ children, rect, variant }: OutlineProps) => {
-  const dynamicStyle = useDynamicStyle(rect);
+  const isRightClamped =
+    Math.round(rect.left + rect.width) > Math.round(clampingRect.width);
+
+  const isBottomClamped =
+    Math.round(rect.top + rect.height) > Math.round(clampingRect.height);
+
+  const dynamicStyle = useDynamicStyle(outlineRect);
 
   return (
     <>
       {propertyStyle}
       <div
-        className={`${baseStyle()} ${baseOutlineStyle({ variant })}`}
+        className={`${baseStyle()} ${baseOutlineStyle({ variant, isLeftClamped, isRightClamped, isBottomClamped, isTopClamped })}`}
         style={dynamicStyle}
       >
         {children}

@@ -36,11 +36,13 @@ export const Section = () => {
       onAdd={() => {
         addRepeatedStyleItem(styles, parseCssFragment("none", ["background"]));
       }}
+      collapsible
     >
       <Flex gap={1} direction="column">
         <RepeatedStyle
           label="Backgrounds"
           styles={styles}
+          floatingPanelOffset={{ alignmentAxis: -100 }}
           getItemProps={(_index, primaryValue) => ({
             label: getBackgroundLabel(primaryValue, assets),
           })}

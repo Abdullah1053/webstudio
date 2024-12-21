@@ -149,6 +149,7 @@ test("convert instances to lexical", async () => {
             "format": "",
             "indent": 0,
             "textFormat": 0,
+            "textStyle": "",
             "type": "paragraph",
             "version": 1,
           },
@@ -184,7 +185,7 @@ test("convert lexical to instances updates", async () => {
   }
 
   const updates = editor.getEditorState().read(() => {
-    return $convertToUpdates(treeRootInstance, refs);
+    return $convertToUpdates(treeRootInstance, refs, new Map());
   });
 
   expect(updates).toEqual([

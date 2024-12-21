@@ -30,6 +30,8 @@ import {
 } from "~/canvas/collapsed";
 import { getBrowserStyle } from "./features/webstudio-component/get-browser-style";
 import type { InstanceSelector } from "~/shared/tree-utils";
+import { shallowEqual } from "shallow-equal";
+import warnOnce from "warn-once";
 
 const isHtmlTag = (tag: string): tag is HtmlTags =>
   htmlTags.includes(tag as HtmlTags);
@@ -123,10 +125,29 @@ const subscribeSelectedInstance = (
     selectedInstanceSelector
   );
 
-  visibleElements[0]?.scrollIntoView({
-    behavior: "smooth",
-    block: "nearest",
-  });
+  const updateScroll = () => {
+    const bbox = getAllElementsBoundingBox(visibleElements);
+
+    // Adds a small amount of space around the element after scrolling
+    const topScrollMargin = 16;
+
+    if (bbox.top < 0 || bbox.bottom > window.innerHeight) {
+      const moveToTopDelta = bbox.top - topScrollMargin;
+      const moveToBottomDelta =
+        bbox.bottom - window.innerHeight + topScrollMargin;
+
+      // scrollTo is used because scrollIntoView does not work with elements that have display:contents, etc.
+      // Here, we can be confident that if the outline can be calculated, we can scroll to it.
+      window.scrollTo({
+        top:
+          window.scrollY +
+          (Math.abs(moveToTopDelta) < Math.abs(moveToBottomDelta)
+            ? moveToTopDelta
+            : moveToBottomDelta),
+        behavior: "smooth",
+      });
+    }
+  };
 
   const updateElements = () => {
     visibleElements = getVisibleElementsByInstanceSelector(
@@ -186,7 +207,14 @@ const subscribeSelectedInstance = (
       selectedInstanceSelector
     );
 
-    $selectedInstanceIntanceToTag.set(instanceToTag);
+    if (
+      !shallowEqual(
+        [...($selectedInstanceIntanceToTag.get()?.entries() ?? [])].flat(),
+        [...(instanceToTag?.entries() ?? [])].flat()
+      )
+    ) {
+      $selectedInstanceIntanceToTag.set(instanceToTag);
+    }
 
     const unitSizes = calculateUnitSizes(element);
     $selectedInstanceUnitSizes.set(unitSizes);
@@ -206,19 +234,24 @@ const subscribeSelectedInstance = (
     }
     const activeStates = new Set<string>();
     for (const state of availableStates) {
-      if (element.matches(state)) {
-        activeStates.add(state);
+      try {
+        // pseudo classes like :open or :current are not supported in .matches method
+        if (element.matches(state)) {
+          activeStates.add(state);
+        }
+      } catch {
+        warnOnce(true, `state selector "${state}" is invalid`);
       }
     }
-    $selectedInstanceStates.set(activeStates);
+
+    if (
+      !shallowEqual(activeStates.keys(), $selectedInstanceStates.get().keys())
+    ) {
+      $selectedInstanceStates.set(activeStates);
+    }
   };
 
   let updateStoreTimeouHandle: undefined | ReturnType<typeof setTimeout>;
-
-  const updateStoresDebounced = () => {
-    clearTimeout(updateStoreTimeouHandle);
-    updateStoreTimeouHandle = setTimeout(updateStores, 100);
-  };
 
   const update = () => {
     debounceEffect(() => {
@@ -230,12 +263,13 @@ const subscribeSelectedInstance = (
       // getBoundingClientRect is used instead.
       showOutline();
 
-      // Cause serious performance issues, use debounced version
-      // The result of stores is not needed immediately
-      updateStoresDebounced();
+      updateStores();
 
       // Having that elements can be changed (i.e. div => address tag change, observe again)
       updateObservers();
+
+      // update scroll state
+      updateScroll();
     });
   };
 

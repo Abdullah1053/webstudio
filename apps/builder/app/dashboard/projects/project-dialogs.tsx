@@ -1,5 +1,5 @@
 import { useRevalidator } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import {
   Box,
   Button,
@@ -108,7 +108,7 @@ const DialogContent = ({
       </Flex>
       <DialogActions>
         {primaryButton}
-        <DialogClose asChild>
+        <DialogClose>
           <Button color="ghost">Cancel</Button>
         </DialogClose>
       </DialogActions>
