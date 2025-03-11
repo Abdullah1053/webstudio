@@ -1,39 +1,38 @@
 import { enableMapSet } from "immer";
 import { describe, test, expect, beforeEach } from "vitest";
-import {
-  portalComponent,
-  collectionComponent,
-  type WsComponentMeta,
-} from "@webstudio-is/react-sdk";
 import type { Project } from "@webstudio-is/project";
 import { createDefaultPages } from "@webstudio-is/project-build";
-import { $, ws, renderJsx, ExpressionValue } from "@webstudio-is/template";
-import { parseCss } from "@webstudio-is/css-data";
-import { coreMetas } from "@webstudio-is/react-sdk";
+import {
+  $,
+  ws,
+  expression,
+  renderTemplate,
+  renderData,
+  ResourceValue,
+} from "@webstudio-is/template";
 import * as defaultMetas from "@webstudio-is/sdk-components-react/metas";
 import * as radixMetas from "@webstudio-is/sdk-components-react-radix/metas";
 import type {
   Asset,
   Breakpoint,
-  DataSource,
   Instance,
   Instances,
   Prop,
-  Resource,
   StyleDecl,
   StyleDeclKey,
-  Styles,
   StyleSource,
-  StyleSources,
-  StyleSourceSelections,
   WebstudioData,
   WebstudioFragment,
+  WsComponentMeta,
 } from "@webstudio-is/sdk";
-import { encodeDataSourceVariable, getStyleDeclKey } from "@webstudio-is/sdk";
+import {
+  coreMetas,
+  portalComponent,
+  collectionComponent,
+} from "@webstudio-is/sdk";
 import type { StyleProperty, StyleValue } from "@webstudio-is/css-engine";
 import {
   findClosestEditableInstanceSelector,
-  insertTemplateData,
   deleteInstanceMutable,
   extractWebstudioFragment,
   insertWebstudioFragmentCopy,
@@ -41,6 +40,7 @@ import {
   getWebstudioData,
   insertInstanceChildrenMutable,
   findClosestInsertable,
+  insertWebstudioFragmentAt,
 } from "./instance-utils";
 import {
   $assets,
@@ -57,13 +57,12 @@ import {
   $resources,
 } from "./nano-states";
 import { registerContainers } from "./sync";
-import { mapGroupBy } from "./shim";
-import { $awareness, selectInstance } from "./awareness";
+import { $awareness, getInstancePath, selectInstance } from "./awareness";
 
 enableMapSet();
 registerContainers();
 
-$pages.set(createDefaultPages({ rootInstanceId: "", systemDataSourceId: "" }));
+$pages.set(createDefaultPages({ rootInstanceId: "" }));
 
 const defaultMetasMap = new Map(
   Object.entries({ ...defaultMetas, ...coreMetas })
@@ -121,14 +120,6 @@ const createInstance = (
   return { type: "instance", id, component, children };
 };
 
-const createInstancePair = (
-  id: Instance["id"],
-  component: string,
-  children: Instance["children"]
-): [Instance["id"], Instance] => {
-  return [id, { type: "instance", id, component, children }];
-};
-
 const createStyleDecl = (
   styleSourceId: string,
   breakpointId: string,
@@ -150,14 +141,6 @@ const createStyleDeclPair = (
   `${styleSourceId}:${breakpointId}:${property}:`,
   createStyleDecl(styleSourceId, breakpointId, property, value),
 ];
-
-const createProp = (instanceId: string, id: string, name: string): Prop => ({
-  id,
-  instanceId,
-  name,
-  type: "string",
-  value: id,
-});
 
 const createImageAsset = (id: string, name = "", projectId = ""): Asset => {
   return {
@@ -436,188 +419,84 @@ describe("insert instance children", () => {
   });
 });
 
-test("insert template data with instances", () => {
-  $instances.set(toMap([createInstance("body", "Body", [])]));
-  $styleSourceSelections.set(new Map());
-  $styleSources.set(toMap([{ type: "token", id: "1", name: "Zero" }]));
-  $styles.set(
-    new Map([
-      [
-        "1:base:color:",
-        {
-          breakpointId: "base",
-          styleSourceId: "1",
-          property: "color",
-          value: { type: "keyword", value: "red" },
-        },
-      ],
-    ])
-  );
-  insertTemplateData(
-    {
-      children: [{ type: "id", value: "box" }],
-      instances: [createInstance("box", "Box", [])],
-      props: [],
-      dataSources: [],
-      styleSourceSelections: [],
-      styleSources: [],
-      styles: [],
-      assets: [],
-      resources: [],
-      breakpoints: [],
-    },
-    { parentSelector: ["body"], position: "end" }
-  );
-  expect($instances.get()).toEqual(
-    toMap<Instance>([
-      createInstance("body", "Body", [{ type: "id", value: "box" }]),
-      createInstance("box", "Box", []),
-    ])
-  );
-});
+describe("insert webstudio fragment at", () => {
+  beforeEach(() => {
+    $styleSourceSelections.set(new Map());
+    $styleSources.set(new Map());
+    $breakpoints.set(new Map());
+    $styles.set(new Map());
+    $dataSources.set(new Map());
+    $resources.set(new Map());
+    $props.set(new Map());
+    $assets.set(new Map());
+  });
 
-test("insert template inside text-only instance should wrap the text into Text instance", () => {
-  $instances.set(
-    toMap([
-      createInstance("body", "Body", [
-        {
-          type: "id",
-          value: "heading",
-        },
-      ]),
-      createInstance("heading", "Heading", [
-        { type: "text", value: "Heading text" },
-      ]),
-    ])
-  );
-  insertTemplateData(
-    {
-      children: [{ type: "id", value: "box" }],
-      instances: [createInstance("box", "Box", [])],
-      props: [],
-      dataSources: [],
-      styleSourceSelections: [],
-      styleSources: [],
-      styles: [],
-      assets: [],
-      resources: [],
-      breakpoints: [],
-    },
-    { parentSelector: ["heading", "body"], position: "end" }
-  );
-
-  expect($instances.get()).toEqual(
-    toMap<Instance>([
-      createInstance("body", "Body", [
-        {
-          type: "id",
-          value: "heading",
-        },
-      ]),
-      createInstance("heading", "Heading", [
-        {
-          type: "id",
-          value: expect.not.stringMatching("text") as unknown as string,
-        },
-        { type: "id", value: "box" },
-      ]),
-      createInstance(
-        expect.not.stringMatching("text") as unknown as string,
-        "Text",
-        [{ type: "text", value: "Heading text" }]
+  test("insert multiple instances", () => {
+    $instances.set(renderData(<$.Body ws:id="bodyId"></$.Body>).instances);
+    insertWebstudioFragmentAt(
+      renderTemplate(
+        <>
+          <$.Heading ws:id="headingId"></$.Heading>
+          <$.Paragraph ws:id="paragraphId"></$.Paragraph>
+        </>
       ),
-      createInstance("box", "Box", []),
-    ])
-  );
-});
+      {
+        parentSelector: ["bodyId"],
+        position: "end",
+      }
+    );
+    expect($instances.get()).toEqual(
+      renderData(
+        <$.Body ws:id="bodyId">
+          <$.Heading ws:id={expect.any(String)}></$.Heading>
+          <$.Paragraph ws:id={expect.any(String)}></$.Paragraph>
+        </$.Body>
+      ).instances
+    );
+  });
 
-test("insert template data with only new style sources", () => {
-  $instances.set(new Map([createInstancePair("body", "Body", [])]));
-  $styleSourceSelections.set(new Map());
-  $styleSources.set(new Map([["1", { type: "token", id: "1", name: "Zero" }]]));
-  $styles.set(
-    new Map([
-      [
-        "1:base:color:",
-        {
-          breakpointId: "base",
-          styleSourceId: "1",
-          property: "color",
-          value: { type: "keyword", value: "red" },
-        },
-      ],
-    ])
-  );
-  insertTemplateData(
-    {
-      children: [{ type: "id", value: "box1" }],
-      instances: [
-        { type: "instance", id: "box1", component: "Box", children: [] },
-      ],
-      props: [],
-      dataSources: [],
-      styleSourceSelections: [{ instanceId: "box1", values: ["1", "2"] }],
-      styleSources: [
-        { type: "token", id: "1", name: "One" },
-        { type: "token", id: "2", name: "Two" },
-      ],
-      styles: [
-        {
-          breakpointId: "base",
-          styleSourceId: "1",
-          property: "color",
-          value: { type: "keyword", value: "black" },
-        },
-        {
-          breakpointId: "base",
-          styleSourceId: "1",
-          property: "backgroundColor",
-          value: { type: "keyword", value: "purple" },
-        },
-        {
-          breakpointId: "base",
-          styleSourceId: "2",
-          property: "color",
-          value: { type: "keyword", value: "green" },
-        },
-      ],
-      assets: [],
-      resources: [],
-      breakpoints: [],
-    },
-    { parentSelector: ["body"], position: "end" }
-  );
-  expect($styleSourceSelections.get()).toEqual(
-    new Map([["box1", { instanceId: "box1", values: ["1", "2"] }]])
-  );
-  expect($styleSources.get()).toEqual(
-    new Map([
-      ["1", { type: "token", id: "1", name: "Zero" }],
-      ["2", { type: "token", id: "2", name: "Two" }],
-    ])
-  );
-  expect($styles.get()).toEqual(
-    new Map([
-      [
-        "1:base:color:",
-        {
-          breakpointId: "base",
-          styleSourceId: "1",
-          property: "color",
-          value: { type: "keyword", value: "red" },
-        },
-      ],
-      [
-        "2:base:color:",
-        {
-          breakpointId: "base",
-          styleSourceId: "2",
-          property: "color",
-          value: { type: "keyword", value: "green" },
-        },
-      ],
-    ])
-  );
+  test("insert fragment after insertable", () => {
+    $instances.set(
+      renderData(
+        <$.Body ws:id="bodyId">
+          <$.Box ws:id="boxId"></$.Box>
+        </$.Body>
+      ).instances
+    );
+    insertWebstudioFragmentAt(
+      renderTemplate(<$.Heading ws:id="headingId"></$.Heading>),
+      {
+        parentSelector: ["boxId", "bodyId"],
+        position: "after",
+      }
+    );
+    expect($instances.get()).toEqual(
+      renderData(
+        <$.Body ws:id="bodyId">
+          <$.Box ws:id="boxId"></$.Box>
+          <$.Heading ws:id={expect.any(String)}></$.Heading>
+        </$.Body>
+      ).instances
+    );
+  });
+
+  test("insert fragment inside of body when configured to place after insertable", () => {
+    $instances.set(renderData(<$.Body ws:id="bodyId"></$.Body>).instances);
+    insertWebstudioFragmentAt(
+      renderTemplate(<$.Heading ws:id="headingId"></$.Heading>),
+      {
+        parentSelector: ["bodyId"],
+        position: "after",
+      }
+    );
+    expect($instances.get()).toEqual(
+      renderData(
+        <$.Body ws:id="bodyId">
+          <$.Heading ws:id={expect.any(String)}></$.Heading>
+        </$.Body>
+      ).instances
+    );
+  });
 });
 
 describe("reparent instance", () => {
@@ -848,7 +727,7 @@ describe("reparent instance", () => {
 
   test("reparent required child", () => {
     $instances.set(
-      renderJsx(
+      renderData(
         <$.Body ws:id="body">
           <$.Tooltip ws:id="tooltip">
             <$.TooltipTrigger ws:id="trigger"></$.TooltipTrigger>
@@ -865,7 +744,7 @@ describe("reparent instance", () => {
       position: "end",
     });
     expect($instances.get()).toEqual(
-      renderJsx(
+      renderData(
         <$.Body ws:id="body">
           <$.Tooltip ws:id="tooltip">
             <$.TooltipContent ws:id="content"></$.TooltipContent>
@@ -880,7 +759,7 @@ describe("reparent instance", () => {
 const getWebstudioDataStub = (
   data?: Partial<WebstudioData>
 ): WebstudioData => ({
-  pages: createDefaultPages({ rootInstanceId: "", systemDataSourceId: "" }),
+  pages: createDefaultPages({ rootInstanceId: "" }),
   assets: new Map(),
   dataSources: new Map(),
   resources: new Map(),
@@ -895,132 +774,150 @@ const getWebstudioDataStub = (
 
 describe("delete instance", () => {
   test("delete instance with its children", () => {
-    // body
-    //   box1
-    //     box11
-    //   box2
-    const instances = new Map([
-      createInstancePair("body", "Body", [
-        { type: "id", value: "box1" },
-        { type: "id", value: "box2" },
-      ]),
-      createInstancePair("box1", "Box", [{ type: "id", value: "box11" }]),
-      createInstancePair("box11", "Box", []),
-      createInstancePair("box2", "Box", []),
-    ]);
-    $registeredComponentMetas.set(createFakeComponentMetas({}));
-    const data = getWebstudioDataStub({ instances });
-    deleteInstanceMutable(data, ["box1", "body"]);
-    expect(data.instances).toEqual(
-      new Map([
-        createInstancePair("body", "Body", [{ type: "id", value: "box2" }]),
-        createInstancePair("box2", "Box", []),
-      ])
+    const data = renderData(
+      <$.Body ws:id="bodyId">
+        <$.Box ws:id="boxId">
+          <$.Box ws:id="sectionId"></$.Box>
+        </$.Box>
+        <$.Box ws:id="divId"></$.Box>
+      </$.Body>
     );
+    expect(data.instances.size).toEqual(4);
+    expect(data.instances.get("bodyId")?.children.length).toEqual(2);
+    deleteInstanceMutable(
+      data,
+      // clone to make sure data is mutated instead of instance path
+      structuredClone(getInstancePath(["boxId", "bodyId"], data.instances))
+    );
+    expect(data.instances.size).toEqual(2);
+    expect(data.instances.get("bodyId")?.children.length).toEqual(1);
+  });
+
+  test("delete instance from collection", () => {
+    const data = renderData(
+      <$.Body ws:id="bodyId">
+        <ws.collection ws:id="collectionId">
+          <$.Box ws:id="boxId"></$.Box>
+        </ws.collection>
+      </$.Body>
+    );
+    expect(data.instances.size).toEqual(3);
+    expect(data.instances.get("collectionId")?.children.length).toEqual(1);
+    deleteInstanceMutable(
+      data,
+      getInstancePath(
+        ["boxId", "collectionId[0]", "collectionId", "bodyId"],
+        data.instances
+      )
+    );
+    expect(data.instances.size).toEqual(2);
+    expect(data.instances.get("collectionId")?.children.length).toEqual(0);
   });
 
   test("delete instance from collection item", () => {
-    // body
-    //   list
-    //     box
-    const instances = new Map([
-      createInstancePair("body", "Body", [{ type: "id", value: "list" }]),
-      createInstancePair("list", collectionComponent, [
-        { type: "id", value: "box" },
-      ]),
-      createInstancePair("box", "Box", []),
-    ]);
-    $registeredComponentMetas.set(createFakeComponentMetas({}));
-    const data = getWebstudioDataStub({ instances });
-    deleteInstanceMutable(data, ["box", "list[0]", "list", "body"]);
-    expect(data.instances).toEqual(
-      new Map([
-        createInstancePair("body", "Body", [{ type: "id", value: "list" }]),
-        createInstancePair("list", collectionComponent, []),
-      ])
+    const data = renderData(
+      <$.Body ws:id="bodyId">
+        <ws.collection ws:id="collectionId">
+          <$.Box ws:id="boxId">
+            <$.Text ws:id="textId"></$.Text>
+          </$.Box>
+        </ws.collection>
+      </$.Body>
     );
+    expect(data.instances.size).toEqual(4);
+    expect(data.instances.get("boxId")?.children.length).toEqual(1);
+    deleteInstanceMutable(
+      data,
+      getInstancePath(
+        ["textId", "boxId", "collectionId[0]", "collectionId", "bodyId"],
+        data.instances
+      )
+    );
+    expect(data.instances.size).toEqual(3);
+    expect(data.instances.get("boxId")?.children.length).toEqual(0);
   });
 
-  test("delete resource along with variable", () => {
-    const instances = toMap([
-      createInstance("body", "Body", [{ type: "id", value: "box" }]),
-      createInstance("box", "Box", []),
-    ]);
-    const resources = toMap<Resource>([
-      {
-        id: "resourceId",
-        name: "My Resource",
-        url: `""`,
-        method: "get",
-        headers: [],
-      },
-    ]);
-    const dataSources = toMap<DataSource>([
-      {
-        id: "resourceVariableId",
-        scopeInstanceId: "box",
-        name: "My Resource Variable",
-        type: "resource",
-        resourceId: "resourceId",
-      },
-    ]);
-    $registeredComponentMetas.set(createFakeComponentMetas({}));
-
-    const data = getWebstudioDataStub({ instances, resources, dataSources });
-    deleteInstanceMutable(data, ["box", "body"]);
-
-    expect(data.instances).toEqual(toMap([createInstance("body", "Body", [])]));
-    expect(data.dataSources).toEqual(new Map());
-    expect(data.resources).toEqual(new Map());
+  test("delete resource bound to variable", () => {
+    const myResource = new ResourceValue("My Resource", {
+      url: expression`""`,
+      method: "get",
+      headers: [],
+    });
+    const data = renderData(
+      <$.Body ws:id="bodyId">
+        <$.Box ws:id="boxId" vars={expression`${myResource}`}></$.Box>
+      </$.Body>
+    );
+    expect(data.resources.size).toEqual(1);
+    expect(data.dataSources.size).toEqual(1);
+    deleteInstanceMutable(
+      data,
+      getInstancePath(["boxId", "bodyId"], data.instances)
+    );
+    expect(data.resources.size).toEqual(0);
+    expect(data.dataSources.size).toEqual(0);
   });
 
-  test("delete instance without meta", () => {
-    // body
-    //   invalid
-    const instances = new Map([
-      createInstancePair("body", "Body", [{ type: "id", value: "invalid" }]),
-      createInstancePair("invalid", "Invalid", []),
-    ]);
-    $registeredComponentMetas.set(new Map());
-    const data = getWebstudioDataStub({ instances });
-    deleteInstanceMutable(data, ["invalid", "body"]);
-    expect(data.instances).toEqual(
-      new Map([createInstancePair("body", "Body", [])])
+  test("delete resource bound to prop", () => {
+    const myResource = new ResourceValue("My Resource", {
+      url: expression`""`,
+      method: "get",
+      headers: [],
+    });
+    const data = renderData(
+      <$.Body ws:id="bodyId">
+        <$.Box ws:id="boxId" action={myResource}></$.Box>
+      </$.Body>
     );
+    expect(data.resources.size).toEqual(1);
+    expect(data.props.size).toEqual(1);
+    deleteInstanceMutable(
+      data,
+      getInstancePath(["boxId", "bodyId"], data.instances)
+    );
+    expect(data.resources.size).toEqual(0);
+    expect(data.props.size).toEqual(0);
+  });
+
+  test("delete unknown instance (just in case)", () => {
+    const data = renderData(
+      <$.Body ws:id="bodyId">
+        <$.Invalid ws:id="invalidId"></$.Invalid>
+      </$.Body>
+    );
+    expect(data.instances.size).toEqual(2);
+    deleteInstanceMutable(
+      data,
+      getInstancePath(["invalidId", "bodyId"], data.instances)
+    );
+    expect(data.instances.size).toEqual(1);
+  });
+
+  test("delete slot fragment along with last child", () => {
+    const data = renderData(
+      <$.Body ws:id="bodyId">
+        <$.Slot ws:id="slotId">
+          <$.Fragment ws:id="fragmentId">
+            <$.Box ws:id="boxId"></$.Box>
+          </$.Fragment>
+        </$.Slot>
+      </$.Body>
+    );
+    expect(data.instances.size).toEqual(4);
+    expect(data.instances.get("fragmentId")?.children.length).toEqual(1);
+    deleteInstanceMutable(
+      data,
+      getInstancePath(
+        ["boxId", "fragmentId", "slotId", "bodyId"],
+        data.instances
+      )
+    );
+    expect(data.instances.size).toEqual(2);
+    expect(data.instances.get("slotId")?.children.length).toEqual(0);
   });
 });
 
 describe("extract webstudio fragment", () => {
-  test("collect the instance by id and all its descendants including portal instances", () => {
-    // body
-    //   bodyChild1
-    //     slot
-    //       slotChild
-    //   bodyChild2
-    $instances.set(
-      toMap([
-        createInstance("body", "Body", [
-          { type: "id", value: "bodyChild1" },
-          { type: "id", value: "bodyChild2" },
-        ]),
-        createInstance("bodyChild1", "Box", [{ type: "id", value: "slot" }]),
-        createInstance("slot", "Slot", [{ type: "id", value: "slotChild" }]),
-        createInstance("slotChild", "Box", []),
-        createInstance("bodyChild2", "Box", []),
-      ])
-    );
-    const { instances } = extractWebstudioFragment(
-      getWebstudioData(),
-      "bodyChild1"
-    );
-
-    expect(instances).toEqual([
-      createInstance("bodyChild1", "Box", [{ type: "id", value: "slot" }]),
-      createInstance("slot", "Slot", [{ type: "id", value: "slotChild" }]),
-      createInstance("slotChild", "Box", []),
-    ]);
-  });
-
   test("collect all styles and breakpoints bound to fragment instances", () => {
     // body
     //   box1
@@ -1082,32 +979,6 @@ describe("extract webstudio fragment", () => {
       createStyleDecl("token2", "base", "color", "orange"),
     ]);
     expect(breakpoints).toEqual([{ id: "base", label: "base" }]);
-  });
-
-  test("collect all props bound to fragment instances", () => {
-    // body
-    //   box1
-    //     box2
-    $instances.set(
-      toMap([
-        createInstance("body", "Body", [{ type: "id", value: "box1" }]),
-        createInstance("box1", "Box", [{ type: "id", value: "box2" }]),
-        createInstance("box2", "Box", []),
-      ])
-    );
-    $props.set(
-      toMap([
-        createProp("body", "bodyProp", "data-body"),
-        createProp("box1", "box1Prop", "data-box1"),
-        createProp("box2", "box2Prop", "data-box2"),
-      ])
-    );
-    const { props } = extractWebstudioFragment(getWebstudioData(), "box1");
-
-    expect(props).toEqual([
-      createProp("box1", "box1Prop", "data-box1"),
-      createProp("box2", "box2Prop", "data-box2"),
-    ]);
   });
 
   test("collect assets from props and styles withiin fragment instances", () => {
@@ -1196,488 +1067,6 @@ describe("extract webstudio fragment", () => {
       createFontAsset("asset6", "font2"),
     ]);
   });
-
-  test("collect data sources used in expression props within instances", () => {
-    // body
-    //   box1
-    //     box2
-    $instances.set(
-      toMap([
-        createInstance("body", "Body", [{ type: "id", value: "box1" }]),
-        createInstance("box1", "Box", [{ type: "id", value: "box2" }]),
-        createInstance("box2", "Box", []),
-      ])
-    );
-    $dataSources.set(
-      toMap([
-        {
-          id: "box1$state",
-          scopeInstanceId: "box1",
-          type: "variable",
-          name: "state",
-          value: { type: "string", value: "initial" },
-        },
-      ])
-    );
-    $props.set(
-      toMap([
-        {
-          id: "box1$stateProp",
-          instanceId: "box1",
-          name: "state",
-          type: "expression",
-          value: "$ws$dataSource$box1$state",
-        },
-        {
-          id: "box2$stateProp",
-          instanceId: "box2",
-          name: "state",
-          type: "expression",
-          value: "$ws$dataSource$box1$state",
-        },
-        {
-          id: "box2$showProp",
-          instanceId: "box2",
-          name: "show",
-          type: "expression",
-          value: `$ws$dataSource$box1$state === 'initial'`,
-        },
-        {
-          id: "box2$trueProp",
-          instanceId: "box2",
-          name: "bool-prop",
-          type: "expression",
-          value: `true`,
-        },
-      ])
-    );
-    const { props, dataSources } = extractWebstudioFragment(
-      getWebstudioData(),
-      "box2"
-    );
-
-    expect(dataSources).toEqual([
-      {
-        id: "box1$state",
-        scopeInstanceId: "box1",
-        type: "variable",
-        name: "state",
-        value: { type: "string", value: "initial" },
-      },
-    ]);
-    expect(props).toEqual([
-      {
-        id: "box2$stateProp",
-        instanceId: "box2",
-        name: "state",
-        type: "expression",
-        value: "$ws$dataSource$box1$state",
-      },
-      {
-        id: "box2$showProp",
-        instanceId: "box2",
-        name: "show",
-        type: "expression",
-        value: `$ws$dataSource$box1$state === 'initial'`,
-      },
-      {
-        id: "box2$trueProp",
-        instanceId: "box2",
-        name: "bool-prop",
-        type: "expression",
-        value: `true`,
-      },
-    ]);
-  });
-
-  test("collect data sources used in actions within instances", () => {
-    // body
-    //   box1
-    //     box2
-    $instances.set(
-      toMap([
-        createInstance("body", "Body", [{ type: "id", value: "box1" }]),
-        createInstance("box1", "Box", [{ type: "id", value: "box2" }]),
-        createInstance("box2", "Box", []),
-      ])
-    );
-    $dataSources.set(
-      toMap([
-        {
-          id: "box1$state",
-          scopeInstanceId: "box1",
-          type: "variable",
-          name: "state",
-          value: { type: "string", value: "initial" },
-        },
-        {
-          id: "box2$state",
-          scopeInstanceId: "box2",
-          type: "variable",
-          name: "state",
-          value: { type: "string", value: "initial" },
-        },
-      ])
-    );
-    $props.set(
-      toMap([
-        {
-          id: "box2$onChange1",
-          instanceId: "box2",
-          type: "action",
-          name: "onChange",
-          value: [
-            {
-              type: "execute",
-              args: ["value"],
-              code: `$ws$dataSource$box1$state = value`,
-            },
-          ],
-        },
-        {
-          id: "box2$onChange2",
-          instanceId: "box2",
-          type: "action",
-          name: "onChange",
-          value: [
-            {
-              type: "execute",
-              args: ["value"],
-              code: `$ws$dataSource$box2$state = value`,
-            },
-          ],
-        },
-      ])
-    );
-    const { props, dataSources } = extractWebstudioFragment(
-      getWebstudioData(),
-      "box2"
-    );
-
-    expect(dataSources).toEqual([
-      {
-        id: "box1$state",
-        scopeInstanceId: "box1",
-        type: "variable",
-        name: "state",
-        value: { type: "string", value: "initial" },
-      },
-      {
-        id: "box2$state",
-        scopeInstanceId: "box2",
-        type: "variable",
-        name: "state",
-        value: { type: "string", value: "initial" },
-      },
-    ]);
-    expect(props).toEqual([
-      {
-        id: "box2$onChange1",
-        instanceId: "box2",
-        type: "action",
-        name: "onChange",
-        value: [
-          {
-            args: ["value"],
-            code: "$ws$dataSource$box1$state = value",
-            type: "execute",
-          },
-        ],
-      },
-      {
-        id: "box2$onChange2",
-        instanceId: "box2",
-        type: "action",
-        name: "onChange",
-        value: [
-          {
-            type: "execute",
-            args: ["value"],
-            code: `$ws$dataSource$box2$state = value`,
-          },
-        ],
-      },
-    ]);
-  });
-
-  test("collect data sources used in expression children within instances", () => {
-    // body
-    //   box
-    $instances.set(
-      toMap([
-        createInstance("body", "Body", [{ type: "id", value: "box" }]),
-        createInstance("box", "Box", [
-          {
-            type: "expression",
-            value: "$ws$dataSource$body + $ws$dataSource$box",
-          },
-        ]),
-      ])
-    );
-    $dataSources.set(
-      toMap([
-        {
-          id: "body",
-          scopeInstanceId: "body",
-          type: "variable",
-          name: "body",
-          value: { type: "string", value: "body" },
-        },
-        {
-          id: "bodyUnused",
-          scopeInstanceId: "body",
-          type: "variable",
-          name: "bodyUnused",
-          value: { type: "string", value: "bodyUnused" },
-        },
-        {
-          id: "box",
-          scopeInstanceId: "box",
-          type: "variable",
-          name: "box",
-          value: { type: "string", value: "box" },
-        },
-      ])
-    );
-    const { dataSources } = extractWebstudioFragment(getWebstudioData(), "box");
-
-    expect(dataSources).toEqual([
-      {
-        id: "body",
-        scopeInstanceId: "body",
-        type: "variable",
-        name: "body",
-        value: { type: "string", value: "body" },
-      },
-      {
-        id: "box",
-        scopeInstanceId: "box",
-        type: "variable",
-        name: "box",
-        value: { type: "string", value: "box" },
-      },
-    ]);
-  });
-
-  test("collect resources within instances", () => {
-    // body
-    //   box1
-    //   box2
-    $instances.set(
-      toMap([
-        createInstance("body", "Body", [
-          { type: "id", value: "box1" },
-          { type: "id", value: "box2" },
-        ]),
-        createInstance("box1", "Box", []),
-        createInstance("box2", "Box", []),
-      ])
-    );
-    $resources.set(
-      toMap([
-        {
-          id: "resource1",
-          name: "resource1",
-          url: `""`,
-          method: "get",
-          headers: [],
-        },
-        {
-          id: "resource2",
-          name: "resource2",
-          url: `""`,
-          method: "get",
-          headers: [],
-        },
-        {
-          id: "resource3",
-          name: "resource3",
-          url: `""`,
-          method: "get",
-          headers: [],
-        },
-      ])
-    );
-    $dataSources.set(
-      toMap([
-        {
-          id: "body$state",
-          scopeInstanceId: "box1",
-          name: "data1",
-          type: "resource",
-          resourceId: "resource1",
-        },
-        {
-          id: "box1$state",
-          scopeInstanceId: "box1",
-          name: "data2",
-          type: "resource",
-          resourceId: "resource2",
-        },
-        {
-          id: "box2$state",
-          scopeInstanceId: "box2",
-          type: "resource",
-          name: "data3",
-          resourceId: "resource3",
-        },
-      ])
-    );
-    const { resources, dataSources } = extractWebstudioFragment(
-      getWebstudioData(),
-      "box1"
-    );
-
-    expect(resources).toEqual([
-      {
-        id: "resource1",
-        name: "resource1",
-        url: `""`,
-        method: "get",
-        headers: [],
-      },
-      {
-        id: "resource2",
-        name: "resource2",
-        url: `""`,
-        method: "get",
-        headers: [],
-      },
-    ]);
-    expect(dataSources).toEqual([
-      {
-        id: "body$state",
-        scopeInstanceId: "box1",
-        name: "data1",
-        type: "resource",
-        resourceId: "resource1",
-      },
-      {
-        id: "box1$state",
-        scopeInstanceId: "box1",
-        name: "data2",
-        type: "resource",
-        resourceId: "resource2",
-      },
-    ]);
-  });
-
-  test("collect data sources used in resources", () => {
-    // body
-    //   box
-    $instances.set(
-      toMap([
-        createInstance("body", "Body", [{ type: "id", value: "box" }]),
-        createInstance("box", "Box", []),
-      ])
-    );
-    $resources.set(
-      toMap([
-        {
-          id: "resourceId",
-          name: "resourceName",
-          url: `$ws$dataSource$bodyUrl`,
-          method: "post",
-          headers: [
-            {
-              name: "Authorization",
-              value: `"Token " + $ws$dataSource$bodyToken`,
-            },
-          ],
-          body: `$ws$dataSource$boxBody`,
-        },
-      ])
-    );
-    $dataSources.set(
-      toMap([
-        {
-          id: "boxData",
-          scopeInstanceId: "box",
-          name: "data",
-          type: "resource",
-          resourceId: "resourceId",
-        },
-        {
-          id: "boxBody",
-          scopeInstanceId: "box",
-          name: "token",
-          type: "variable",
-          value: { type: "string", value: "body" },
-        },
-        {
-          id: "bodyUrl",
-          scopeInstanceId: "body",
-          name: "url",
-          type: "variable",
-          value: { type: "string", value: "url" },
-        },
-        {
-          id: "bodyToken",
-          scopeInstanceId: "body",
-          name: "token",
-          type: "variable",
-          value: { type: "string", value: "token" },
-        },
-        {
-          id: "bodyAnotherUrl",
-          scopeInstanceId: "body",
-          name: "anotherUrl",
-          type: "variable",
-          value: { type: "string", value: "anotherUrl" },
-        },
-      ])
-    );
-    const { resources, dataSources } = extractWebstudioFragment(
-      getWebstudioData(),
-      "box"
-    );
-
-    expect(resources).toEqual([
-      {
-        id: "resourceId",
-        name: "resourceName",
-        url: `$ws$dataSource$bodyUrl`,
-        method: "post",
-        headers: [
-          {
-            name: "Authorization",
-            value: `"Token " + $ws$dataSource$bodyToken`,
-          },
-        ],
-        body: `$ws$dataSource$boxBody`,
-      },
-    ]);
-    expect(dataSources).toEqual([
-      {
-        id: "boxData",
-        scopeInstanceId: "box",
-        name: "data",
-        type: "resource",
-        resourceId: "resourceId",
-      },
-      {
-        id: "boxBody",
-        scopeInstanceId: "box",
-        name: "token",
-        type: "variable",
-        value: { type: "string", value: "body" },
-      },
-      {
-        id: "bodyUrl",
-        scopeInstanceId: "body",
-        name: "url",
-        type: "variable",
-        value: { type: "string", value: "url" },
-      },
-      {
-        id: "bodyToken",
-        scopeInstanceId: "body",
-        name: "token",
-        type: "variable",
-        value: { type: "string", value: "token" },
-      },
-    ]);
-  });
 });
 
 describe("insert webstudio fragment copy", () => {
@@ -1722,7 +1111,7 @@ describe("insert webstudio fragment copy", () => {
         ...emptyFragment,
         assets: [createImageAsset("asset1", "name", "another_project")],
       },
-      availableDataSources: new Set(),
+      availableVariables: [],
     });
     expect(Array.from(data.assets.values())).toEqual([
       createImageAsset("asset1", "name", "current_project"),
@@ -1740,7 +1129,7 @@ describe("insert webstudio fragment copy", () => {
           createImageAsset("asset2", "another_name", "another_project"),
         ],
       },
-      availableDataSources: new Set(),
+      availableVariables: [],
     });
     expect(Array.from(data.assets.values())).toEqual([
       // preserve any user changes
@@ -1774,7 +1163,7 @@ describe("insert webstudio fragment copy", () => {
           },
         ],
       },
-      availableDataSources: new Set(),
+      availableVariables: [],
     });
     expect(Array.from(data.breakpoints.values())).toEqual([
       { id: "existing_base", label: "base" },
@@ -1813,7 +1202,7 @@ describe("insert webstudio fragment copy", () => {
           },
         ],
       },
-      availableDataSources: new Set(),
+      availableVariables: [],
     });
     expect(Array.from(data.styleSources.values())).toEqual([
       { id: "token1", type: "token", name: "oldLabel" },
@@ -1825,605 +1214,6 @@ describe("insert webstudio fragment copy", () => {
         breakpointId: "base",
         property: "color",
         value: { type: "keyword", value: "green" },
-      },
-    ]);
-  });
-
-  test("insert instances", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        instances: [
-          {
-            type: "instance",
-            id: "box",
-            component: "Box",
-            children: [],
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    expect(Array.from(data.instances.keys())).toEqual([
-      expect.not.stringMatching("box"),
-    ]);
-  });
-
-  test("insert instances with portals", () => {
-    // portal
-    //   fragment
-    //     box
-    const instancesWithPortals: Instance[] = [
-      {
-        type: "instance",
-        id: "portal",
-        component: portalComponent,
-        children: [{ type: "id", value: "fragment" }],
-      },
-      {
-        type: "instance",
-        id: "fragment",
-        component: "Fragment",
-        children: [{ type: "id", value: "box" }],
-      },
-      {
-        type: "instance",
-        id: "box",
-        component: "Box",
-        children: [{ type: "text", value: "First" }],
-      },
-    ];
-    const data = getWebstudioDataStub();
-
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        instances: instancesWithPortals,
-      },
-      availableDataSources: new Set(),
-    });
-
-    expect(Array.from(data.instances.values())).toEqual([
-      {
-        type: "instance",
-        id: "fragment",
-        component: "Fragment",
-        children: [{ type: "id", value: "box" }],
-      },
-      {
-        type: "instance",
-        id: "box",
-        component: "Box",
-        children: [{ type: "text", value: "First" }],
-      },
-      {
-        type: "instance",
-        id: expect.not.stringMatching("portal"),
-        component: portalComponent,
-        children: [{ type: "id", value: "fragment" }],
-      },
-    ]);
-
-    // change portal content and make sure it does not break
-    // when stale portal with same id is inserted
-    data.instances.delete("box");
-    data.instances.set("fragment", {
-      type: "instance",
-      id: "fragment",
-      component: "Fragment",
-      children: [],
-    });
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        instances: instancesWithPortals,
-      },
-      availableDataSources: new Set(),
-    });
-
-    expect(Array.from(data.instances.values())).toEqual([
-      {
-        type: "instance",
-        id: "fragment",
-        component: "Fragment",
-        children: [],
-      },
-      {
-        type: "instance",
-        id: expect.not.stringMatching("portal"),
-        component: portalComponent,
-        children: [{ type: "id", value: "fragment" }],
-      },
-      {
-        type: "instance",
-        id: expect.not.stringMatching("portal"),
-        component: portalComponent,
-        children: [{ type: "id", value: "fragment" }],
-      },
-    ]);
-  });
-
-  test("insert props with new ids", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        props: [
-          {
-            id: "prop1",
-            instanceId: "body",
-            name: "myProp1",
-            type: "string",
-            value: "",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    expect(Array.from(data.props.values())).toEqual([
-      {
-        id: expect.not.stringMatching("prop1"),
-        instanceId: expect.not.stringMatching("body"),
-        name: "myProp1",
-        type: "string",
-        value: "",
-      },
-    ]);
-  });
-
-  test("insert props from portals with old ids", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        // portal
-        //   fragment
-        instances: [
-          {
-            type: "instance",
-            id: "portal",
-            component: portalComponent,
-            children: [{ type: "id", value: "fragment" }],
-          },
-          {
-            type: "instance",
-            id: "fragment",
-            component: "Fragment",
-            children: [],
-          },
-        ],
-        props: [
-          {
-            id: "prop1",
-            instanceId: "fragment",
-            name: "myProp1",
-            type: "string",
-            value: "",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    expect(Array.from(data.props.values())).toEqual([
-      {
-        id: "prop1",
-        instanceId: "fragment",
-        name: "myProp1",
-        type: "string",
-        value: "",
-      },
-    ]);
-  });
-
-  test("insert data sources with new ids", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        dataSources: [
-          {
-            id: "variableId",
-            scopeInstanceId: "body",
-            type: "variable",
-            name: "myVariable",
-            value: { type: "string", value: "" },
-          },
-        ],
-        instances: [
-          createInstance("body", "Body", [
-            { type: "expression", value: "$ws$dataSource$variableId" },
-          ]),
-        ],
-        props: [
-          {
-            id: "expressionId",
-            instanceId: "body",
-            name: "myProp1",
-            type: "expression",
-            value: "$ws$dataSource$variableId",
-          },
-          {
-            id: "actionId",
-            instanceId: "body",
-            name: "myProp2",
-            type: "action",
-            value: [
-              {
-                type: "execute",
-                args: [],
-                code: `$ws$dataSource$variableId = ""`,
-              },
-            ],
-          },
-          {
-            id: "parameterId",
-            instanceId: "body",
-            name: "myProp3",
-            type: "parameter",
-            value: "variableId",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    const [newVariableId] = data.dataSources.keys();
-    const [newInstanceId] = data.instances.keys();
-    expect(newVariableId).not.toEqual("variableId");
-    expect(Array.from(data.dataSources.values())).toEqual([
-      {
-        id: newVariableId,
-        scopeInstanceId: newInstanceId,
-        type: "variable",
-        name: "myVariable",
-        value: { type: "string", value: "" },
-      },
-    ]);
-    expect(Array.from(data.instances.values())).toEqual([
-      createInstance(newInstanceId, "Body", [
-        { type: "expression", value: encodeDataSourceVariable(newVariableId) },
-      ]),
-    ]);
-    expect(Array.from(data.props.values())).toEqual([
-      {
-        id: expect.not.stringMatching("expressionId"),
-        instanceId: newInstanceId,
-        name: "myProp1",
-        type: "expression",
-        value: encodeDataSourceVariable(newVariableId),
-      },
-      {
-        id: expect.not.stringMatching("actionId"),
-        instanceId: newInstanceId,
-        name: "myProp2",
-        type: "action",
-        value: [
-          {
-            type: "execute",
-            args: [],
-            code: `${encodeDataSourceVariable(newVariableId)} = ""`,
-          },
-        ],
-      },
-      {
-        id: expect.not.stringMatching("parameterId"),
-        instanceId: newInstanceId,
-        name: "myProp3",
-        type: "parameter",
-        value: newVariableId,
-      },
-    ]);
-  });
-
-  test("inline data sources when not available in scope", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        dataSources: [
-          {
-            id: "outsideVariableId",
-            scopeInstanceId: "outsideInstanceId",
-            type: "variable",
-            name: "myOutsideVariable",
-            value: { type: "string", value: "outside" },
-          },
-          {
-            id: "insideVariableId",
-            scopeInstanceId: "insideInstanceId",
-            type: "variable",
-            name: "myInsideVariable",
-            value: { type: "string", value: "inside" },
-          },
-        ],
-        instances: [
-          createInstance("body", "Body", [
-            {
-              type: "expression",
-              value:
-                "$ws$dataSource$outsideVariableId + $ws$dataSource$insideVariableId",
-            },
-          ]),
-        ],
-        props: [
-          {
-            id: "expressionId",
-            instanceId: "body",
-            name: "myProp1",
-            type: "expression",
-            value:
-              "$ws$dataSource$outsideVariableId + $ws$dataSource$insideVariableId",
-          },
-          {
-            id: "actionId",
-            instanceId: "body",
-            name: "myProp2",
-            type: "action",
-            value: [
-              {
-                type: "execute",
-                args: [],
-                code: `$ws$dataSource$outsideVariableId = "outside"`,
-              },
-              {
-                type: "execute",
-                args: [],
-                code: `$ws$dataSource$insideVariableId = "inside"`,
-              },
-            ],
-          },
-        ],
-      },
-      availableDataSources: new Set(["insideVariableId"]),
-    });
-    const [newInstanceId] = data.instances.keys();
-    expect(data.dataSources).toEqual(new Map());
-    expect(Array.from(data.instances.values())).toEqual([
-      createInstance(newInstanceId, "Body", [
-        {
-          type: "expression",
-          value: `"outside" + $ws$dataSource$insideVariableId`,
-        },
-      ]),
-    ]);
-    expect(Array.from(data.props.values())).toEqual([
-      {
-        id: expect.not.stringMatching("expressionId"),
-        instanceId: newInstanceId,
-        name: "myProp1",
-        type: "expression",
-        value: `"outside" + $ws$dataSource$insideVariableId`,
-      },
-      {
-        id: expect.not.stringMatching("actionId"),
-        instanceId: newInstanceId,
-        name: "myProp2",
-        type: "action",
-        value: [
-          {
-            type: "execute",
-            args: [],
-            code: `$ws$dataSource$insideVariableId = "inside"`,
-          },
-        ],
-      },
-    ]);
-  });
-
-  test("insert data sources from portals with old ids", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        // portal
-        //   fragment
-        instances: [
-          {
-            type: "instance",
-            id: "portal",
-            component: portalComponent,
-            children: [{ type: "id", value: "fragment" }],
-          },
-          {
-            type: "instance",
-            id: "fragment",
-            component: "Fragment",
-            children: [
-              { type: "expression", value: "$ws$dataSource$variableId" },
-            ],
-          },
-        ],
-        dataSources: [
-          {
-            id: "variableId",
-            scopeInstanceId: "fragment",
-            type: "variable",
-            name: "myVariable",
-            value: { type: "string", value: "" },
-          },
-        ],
-        props: [
-          {
-            id: "expressionId",
-            instanceId: "fragment",
-            name: "myProp1",
-            type: "expression",
-            value: "$ws$dataSource$variableId",
-          },
-          {
-            id: "actionId",
-            instanceId: "fragment",
-            name: "myProp2",
-            type: "action",
-            value: [
-              {
-                type: "execute",
-                args: [],
-                code: `$ws$dataSource$variableId = ""`,
-              },
-            ],
-          },
-          {
-            id: "parameterId",
-            instanceId: "fragment",
-            name: "myProp3",
-            type: "parameter",
-            value: "variableId",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    expect(Array.from(data.dataSources.values())).toEqual([
-      {
-        id: "variableId",
-        scopeInstanceId: "fragment",
-        type: "variable",
-        name: "myVariable",
-        value: { type: "string", value: "" },
-      },
-    ]);
-    expect(data.instances.get("fragment")).toEqual({
-      type: "instance",
-      id: "fragment",
-      component: "Fragment",
-      children: [{ type: "expression", value: "$ws$dataSource$variableId" }],
-    });
-    expect(Array.from(data.props.values())).toEqual([
-      {
-        id: "expressionId",
-        instanceId: "fragment",
-        name: "myProp1",
-        type: "expression",
-        value: `$ws$dataSource$variableId`,
-      },
-      {
-        id: "actionId",
-        instanceId: "fragment",
-        name: "myProp2",
-        type: "action",
-        value: [
-          {
-            type: "execute",
-            args: [],
-            code: `$ws$dataSource$variableId = ""`,
-          },
-        ],
-      },
-      {
-        id: "parameterId",
-        instanceId: "fragment",
-        name: "myProp3",
-        type: "parameter",
-        value: `variableId`,
-      },
-    ]);
-  });
-
-  test("inline data sources from portals when not available in scope", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        // portal
-        //   fragment
-        instances: [
-          createInstance("portal", portalComponent, [
-            { type: "id", value: "fragment" },
-          ]),
-          createInstance("fragment", "Fragment", [
-            {
-              type: "expression",
-              value:
-                "$ws$dataSource$outsideVariableId + $ws$dataSource$insideVariableId",
-            },
-          ]),
-        ],
-        dataSources: [
-          {
-            id: "outsideVariableId",
-            scopeInstanceId: "outsideInstanceId",
-            type: "variable",
-            name: "myOutsideVariable",
-            value: { type: "string", value: "outside" },
-          },
-          {
-            id: "insideVariableId",
-            scopeInstanceId: "insideInstanceId",
-            type: "variable",
-            name: "myInsideVariable",
-            value: { type: "string", value: "inside" },
-          },
-        ],
-        props: [
-          {
-            id: "expressionId",
-            instanceId: "fragment",
-            name: "myProp1",
-            type: "expression",
-            value:
-              "$ws$dataSource$outsideVariableId + $ws$dataSource$insideVariableId",
-          },
-          {
-            id: "actionId",
-            instanceId: "fragment",
-            name: "myProp2",
-            type: "action",
-            value: [
-              {
-                type: "execute",
-                args: [],
-                code: `$ws$dataSource$outsideVariableId = "outside"`,
-              },
-              {
-                type: "execute",
-                args: [],
-                code: `$ws$dataSource$insideVariableId = "inside"`,
-              },
-            ],
-          },
-        ],
-      },
-      availableDataSources: new Set(["insideVariableId"]),
-    });
-    expect(data.dataSources).toEqual(new Map());
-    expect(data.instances.get("fragment")).toEqual(
-      createInstance("fragment", "Fragment", [
-        {
-          type: "expression",
-          value: `"outside" + $ws$dataSource$insideVariableId`,
-        },
-      ])
-    );
-    expect(Array.from(data.props.values())).toEqual([
-      {
-        id: "expressionId",
-        instanceId: "fragment",
-        name: "myProp1",
-        type: "expression",
-        value: `"outside" + $ws$dataSource$insideVariableId`,
-      },
-      {
-        id: "actionId",
-        instanceId: "fragment",
-        name: "myProp2",
-        type: "action",
-        value: [
-          {
-            type: "execute",
-            args: [],
-            code: `$ws$dataSource$insideVariableId = "inside"`,
-          },
-        ],
       },
     ]);
   });
@@ -2464,7 +1254,7 @@ describe("insert webstudio fragment copy", () => {
           },
         ],
       },
-      availableDataSources: new Set(),
+      availableVariables: [],
     });
     expect(Array.from(data.styleSourceSelections.values())).toEqual([
       {
@@ -2529,7 +1319,7 @@ describe("insert webstudio fragment copy", () => {
           },
         ],
       },
-      availableDataSources: new Set(),
+      availableVariables: [],
     });
     expect(Array.from(data.styleSourceSelections.values())).toEqual([
       { instanceId: "fragment", values: ["localId", "tokenId"] },
@@ -2546,451 +1336,6 @@ describe("insert webstudio fragment copy", () => {
       },
     ]);
   });
-
-  test("insert resources with new ids", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        resources: [
-          {
-            id: "resourceId",
-            name: "",
-            url: `$ws$dataSource$paramVariableId`,
-            method: "post",
-            headers: [
-              { name: "auth", value: "$ws$dataSource$paramVariableId" },
-            ],
-            body: `$ws$dataSource$paramVariableId`,
-          },
-        ],
-        dataSources: [
-          {
-            id: "paramVariableId",
-            scopeInstanceId: "body",
-            name: "myParam",
-            type: "variable",
-            value: { type: "string", value: "myParam" },
-          },
-          {
-            id: "resourceVariableId",
-            scopeInstanceId: "body",
-            name: "myResource",
-            type: "resource",
-            resourceId: "resourceId",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    const [newInstanceId] = data.instances.keys();
-    const [newParamId, newResourceVariableId] = data.dataSources.keys();
-    const [newResourceId] = data.resources.keys();
-    expect(newResourceId).not.toEqual("resourceId");
-    expect(Array.from(data.dataSources.values())).toEqual([
-      {
-        id: newParamId,
-        scopeInstanceId: newInstanceId,
-        name: "myParam",
-        type: "variable",
-        value: { type: "string", value: "myParam" },
-      },
-      {
-        id: newResourceVariableId,
-        scopeInstanceId: newInstanceId,
-        name: "myResource",
-        type: "resource",
-        resourceId: newResourceId,
-      },
-    ]);
-    expect(Array.from(data.resources.values())).toEqual([
-      {
-        id: newResourceId,
-        name: "",
-        url: encodeDataSourceVariable(newParamId),
-        method: "post",
-        headers: [
-          { name: "auth", value: encodeDataSourceVariable(newParamId) },
-        ],
-        body: encodeDataSourceVariable(newParamId),
-      },
-    ]);
-  });
-
-  test("inline data sources into resources when not available in the scope", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        resources: [
-          {
-            id: "resourceId",
-            name: "",
-            url: `$ws$dataSource$paramVariableId`,
-            method: "post",
-            headers: [
-              { name: "auth", value: "$ws$dataSource$paramVariableId" },
-            ],
-            body: `$ws$dataSource$paramVariableId`,
-          },
-        ],
-        dataSources: [
-          {
-            id: "paramVariableId",
-            scopeInstanceId: "outside",
-            name: "myParam",
-            type: "variable",
-            value: { type: "string", value: "myParam" },
-          },
-          {
-            id: "variableId",
-            scopeInstanceId: "body",
-            name: "myResource",
-            type: "resource",
-            resourceId: "resourceId",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    const [newResourceId] = data.resources.keys();
-    expect(Array.from(data.resources.values())).toEqual([
-      {
-        id: newResourceId,
-        name: "",
-        url: `"myParam"`,
-        method: "post",
-        headers: [{ name: "auth", value: `"myParam"` }],
-        body: `"myParam"`,
-      },
-    ]);
-  });
-
-  test("inline resource variables when not available in scope", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        resources: [
-          {
-            id: "resourceId",
-            name: "",
-            url: `""`,
-            method: "get",
-            headers: [],
-          },
-        ],
-        dataSources: [
-          {
-            id: "variableId",
-            scopeInstanceId: "outside",
-            name: "myResource",
-            type: "resource",
-            resourceId: "resourceId",
-          },
-        ],
-        props: [
-          {
-            id: "expressionId",
-            instanceId: "body",
-            name: "myProp",
-            type: "expression",
-            value: "$ws$dataSource$variableId",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    const [newInstanceId] = data.instances.keys();
-    expect(Array.from(data.props.values())).toEqual([
-      {
-        id: expect.not.stringMatching("expressionId"),
-        instanceId: newInstanceId,
-        name: "myProp",
-        type: "expression",
-        value: "{}",
-      },
-    ]);
-  });
-
-  test("insert resources from portals with old ids", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        // portal
-        //   fragment
-        instances: [
-          createInstance("portal", portalComponent, [
-            { type: "id", value: "fragment" },
-          ]),
-          createInstance("fragment", "Fragment", []),
-        ],
-        resources: [
-          {
-            id: "resourceId",
-            name: "",
-            url: `""`,
-            method: "get",
-            headers: [],
-          },
-        ],
-        dataSources: [
-          {
-            id: "variableId",
-            scopeInstanceId: "fragment",
-            name: "myVariable",
-            type: "resource",
-            resourceId: "resourceId",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    expect(Array.from(data.dataSources.values())).toEqual([
-      {
-        id: "variableId",
-        scopeInstanceId: "fragment",
-        name: "myVariable",
-        type: "resource",
-        resourceId: "resourceId",
-      },
-    ]);
-    expect(Array.from(data.resources.values())).toEqual([
-      {
-        id: "resourceId",
-        name: "",
-        url: `""`,
-        method: "get",
-        headers: [],
-      },
-    ]);
-  });
-
-  test("inline data sources into resources from portals when not available in scope", () => {
-    const data = getWebstudioDataStub();
-    insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        // portal
-        //   fragment
-        instances: [
-          createInstance("portal", portalComponent, [
-            { type: "id", value: "fragment" },
-          ]),
-          createInstance("fragment", "Fragment", []),
-        ],
-        resources: [
-          {
-            id: "resourceId",
-            name: "",
-            url: `$ws$dataSource$paramVariableId`,
-            method: "post",
-            headers: [
-              { name: "auth", value: "$ws$dataSource$paramVariableId" },
-            ],
-            body: `$ws$dataSource$paramVariableId`,
-          },
-        ],
-        dataSources: [
-          {
-            id: "paramVariableId",
-            scopeInstanceId: "outside",
-            name: "myParam",
-            type: "variable",
-            value: { type: "string", value: "myParam" },
-          },
-          {
-            id: "variableId",
-            scopeInstanceId: "fragment",
-            name: "myResource",
-            type: "resource",
-            resourceId: "resourceId",
-          },
-        ],
-      },
-      availableDataSources: new Set(),
-    });
-    const [newResourceId] = data.resources.keys();
-    expect(Array.from(data.resources.values())).toEqual([
-      {
-        id: newResourceId,
-        name: "",
-        url: `"myParam"`,
-        method: "post",
-        headers: [{ name: "auth", value: `"myParam"` }],
-        body: `"myParam"`,
-      },
-    ]);
-  });
-
-  test("insert instances with multiple roots", () => {
-    const data = getWebstudioDataStub();
-    const { newInstanceIds } = insertWebstudioFragmentCopy({
-      data,
-      fragment: {
-        ...emptyFragment,
-        // body1
-        //   box1
-        // body2
-        //   box2
-        // explicily define box first and then body
-        // to check first instance is not used as root
-        instances: [
-          createInstance("box1", "Box", []),
-          createInstance("body1", "Body", [{ type: "id", value: "box1" }]),
-          createInstance("body2", "Body", [{ type: "id", value: "box2" }]),
-          createInstance("box2", "Box", []),
-        ],
-        resources: [],
-        dataSources: [],
-      },
-      availableDataSources: new Set(),
-    });
-    expect(data.instances.size).toEqual(4);
-    expect(newInstanceIds.size).toEqual(5);
-  });
-});
-
-describe("copy paste", () => {
-  const css = (strings: TemplateStringsArray, ...values: string[]) => {
-    let cssString = "";
-    strings.forEach((string, index) => {
-      cssString += string + (values[index] ?? "");
-    });
-    const styleSourceSelections: StyleSourceSelections = new Map();
-    const styleSources: StyleSources = new Map();
-    const styles: Styles = new Map();
-    const parsed = mapGroupBy(
-      parseCss(cssString).map((styleDecl) => ({
-        ...styleDecl,
-        selector: styleDecl.selector.startsWith("__")
-          ? styleDecl.selector.slice(2)
-          : styleDecl.selector,
-      })),
-      (parsedStyleDecl) => parsedStyleDecl.selector
-    );
-    for (const [selector, parsedStyles] of parsed) {
-      const [instanceId, styleSourceId] = selector.split("__");
-      styleSourceSelections.set(instanceId, {
-        instanceId: instanceId,
-        values: [styleSourceId],
-      });
-      styleSources.set(styleSourceId, { id: styleSourceId, type: "local" });
-      for (const { property, value } of parsedStyles) {
-        const styleDecl: StyleDecl = {
-          breakpointId: "baseId",
-          styleSourceId,
-          property,
-          value,
-        };
-        styles.set(getStyleDeclKey(styleDecl), styleDecl);
-      }
-    }
-    return { styleSourceSelections, styleSources, styles };
-  };
-
-  test("should add :root local styles", () => {
-    const oldProject = getWebstudioDataStub({
-      ...renderJsx(<$.Body ws:id="oldProjectBodyId"></$.Body>),
-      ...css`
-        :root__oldprojectlocalid {
-          color: red;
-        }
-      `,
-    });
-    const newProject = getWebstudioDataStub();
-    const fragment = extractWebstudioFragment(oldProject, ":root");
-    insertWebstudioFragmentCopy({
-      data: newProject,
-      fragment,
-      availableDataSources: new Set(),
-    });
-    const [newStyleSourceId] = newProject.styleSources.keys();
-    expect(newProject).toEqual(
-      expect.objectContaining(css`
-        :root__${newStyleSourceId} {
-          color: red;
-        }
-      `)
-    );
-  });
-
-  test("should merge :root local styles", () => {
-    const oldProject = getWebstudioDataStub({
-      ...renderJsx(<$.Body ws:id="oldProjectBodyId"></$.Body>),
-      ...css`
-        :root__oldprojectlocalid {
-          color: red;
-        }
-      `,
-    });
-    const newProject = getWebstudioDataStub({
-      ...renderJsx(<$.Body ws:id="oldProjectBodyId"></$.Body>),
-      ...css`
-        :root__newprojectlocalid {
-          font-size: medium;
-        }
-      `,
-    });
-    const fragment = extractWebstudioFragment(oldProject, ":root");
-    insertWebstudioFragmentCopy({
-      data: newProject,
-      fragment,
-      availableDataSources: new Set(),
-    });
-    expect({
-      styleSourceSelections: newProject.styleSourceSelections,
-      styleSources: newProject.styleSources,
-      styles: newProject.styles,
-    }).toEqual(css`
-      :root__newprojectlocalid {
-        font-size: medium;
-        color: red;
-      }
-    `);
-  });
-
-  test("should copy local styles of duplicated instance", () => {
-    const project = getWebstudioDataStub({
-      ...renderJsx(
-        <$.Body ws:id="bodyId">
-          <$.Box ws:id="boxId"></$.Box>
-        </$.Body>
-      ),
-      ...css`
-        boxId__boxlocalid {
-          color: red;
-        }
-      `,
-    });
-    const fragment = extractWebstudioFragment(project, "boxId");
-    insertWebstudioFragmentCopy({
-      data: project,
-      fragment,
-      availableDataSources: new Set(),
-    });
-    const [_bodyId, _boxId, newBoxId] = project.instances.keys();
-    const [_boxLocalId, newBoxLocalId] = project.styleSources.keys();
-    expect({
-      styleSourceSelections: project.styleSourceSelections,
-      styleSources: project.styleSources,
-      styles: project.styles,
-    }).toEqual(css`
-      boxId__boxlocalid {
-        color: red;
-      }
-      /* escape potential leading digit */
-      __${newBoxId}__${newBoxLocalId} {
-        color: red;
-      }
-    `);
-  });
 });
 
 describe("find closest insertable", () => {
@@ -3006,7 +1351,6 @@ describe("find closest insertable", () => {
       createDefaultPages({
         homePageId: "homePageId",
         rootInstanceId: "",
-        systemDataSourceId: "",
       })
     );
     $awareness.set({
@@ -3017,7 +1361,7 @@ describe("find closest insertable", () => {
   });
 
   test("puts in the end if closest instance is container", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="bodyId">
         <$.Box ws:id="boxId">
           <$.Paragraph ws:id="paragraphId">
@@ -3035,7 +1379,7 @@ describe("find closest insertable", () => {
   });
 
   test("puts in the end of root instance", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="bodyId">
         <$.Paragraph ws:id="paragraphId"></$.Paragraph>
       </$.Body>
@@ -3049,7 +1393,7 @@ describe("find closest insertable", () => {
   });
 
   test("puts in the end of root instance when page root only has text", () => {
-    const { instances } = renderJsx(<$.Body ws:id="bodyId">text</$.Body>);
+    const { instances } = renderData(<$.Body ws:id="bodyId">text</$.Body>);
     $instances.set(instances);
     selectInstance(["bodyId"]);
     expect(findClosestInsertable(newBoxFragment)).toEqual({
@@ -3059,7 +1403,7 @@ describe("find closest insertable", () => {
   });
 
   test("finds closest container and puts after its child within selection", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="bodyId">
         <$.Paragraph ws:id="paragraphId">
           <$.Bold ws:id="boldId"></$.Bold>
@@ -3075,12 +1419,10 @@ describe("find closest insertable", () => {
   });
 
   test("finds closest container that doesn't have an expression as a child", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="bodyId">
         <$.Box ws:id="box1Id"></$.Box>
-        <$.Paragraph ws:id="paragraphId">
-          {new ExpressionValue(`"bla"`)}
-        </$.Paragraph>
+        <$.Paragraph ws:id="paragraphId">{expression`"bla"`}</$.Paragraph>
         <$.Box ws:id="box2Id"></$.Box>
       </$.Body>
     );
@@ -3092,15 +1434,45 @@ describe("find closest insertable", () => {
     });
   });
 
+  test("finds closest container without textual placeholder", () => {
+    const { instances } = renderData(
+      <$.Body ws:id="bodyId">
+        <$.Paragraph ws:id="paragraphId"></$.Paragraph>
+      </$.Body>
+    );
+    $instances.set(instances);
+    selectInstance(["paragraphId", "bodyId"]);
+    expect(findClosestInsertable(newBoxFragment)).toEqual({
+      parentSelector: ["bodyId"],
+      position: 1,
+    });
+  });
+
+  test("finds closest container even with when parent has placeholder", () => {
+    const { instances } = renderData(
+      <$.Body ws:id="bodyId">
+        <$.Paragraph ws:id="paragraphId">
+          <$.Box ws:id="spanId" tag="span"></$.Box>
+        </$.Paragraph>
+      </$.Body>
+    );
+    $instances.set(instances);
+    selectInstance(["boxId", "paragraphId", "bodyId"]);
+    expect(findClosestInsertable(newBoxFragment)).toEqual({
+      parentSelector: ["paragraphId", "bodyId"],
+      position: 0,
+    });
+  });
+
   test("forbids inserting into :root", () => {
-    const { instances } = renderJsx(<$.Body ws:id="bodyId"></$.Body>);
+    const { instances } = renderData(<$.Body ws:id="bodyId"></$.Body>);
     $instances.set(instances);
     selectInstance([":root"]);
     expect(findClosestInsertable(newBoxFragment)).toEqual(undefined);
   });
 
   test("allow inserting into collection item", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="bodyId">
         <ws.collection ws:id="collectionId">
           <$.Box ws:id="boxId"></$.Box>
@@ -3116,7 +1488,7 @@ describe("find closest insertable", () => {
   });
 
   test("forbid inserting list item in body", () => {
-    const { instances } = renderJsx(<$.Body ws:id="bodyId"></$.Body>);
+    const { instances } = renderData(<$.Body ws:id="bodyId"></$.Body>);
     $instances.set(instances);
     selectInstance(["bodyId"]);
     const newListItemFragment = createFragment({

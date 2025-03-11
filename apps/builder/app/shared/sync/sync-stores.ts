@@ -16,7 +16,6 @@ import {
   $selectedInstanceSelector,
   $selectedInstanceBrowserStyle,
   $selectedInstanceUnitSizes,
-  $selectedInstanceIntanceToTag,
   $selectedInstanceRenderState,
   $hoveredInstanceSelector,
   $authTokenPermissions,
@@ -47,10 +46,10 @@ import {
   $textToolbar,
   $registeredComponentMetas,
   $registeredComponentPropsMetas,
+  $registeredTemplates,
   $modifierKeys,
 } from "~/shared/nano-states";
 import { $ephemeralStyles } from "~/canvas/stores";
-import { $awareness, $temporaryInstances } from "../awareness";
 import {
   ImmerhinSyncObject,
   NanostoresSyncObject,
@@ -59,6 +58,8 @@ import {
   type SyncEmitter,
 } from "../sync-client";
 import { $canvasScrollbarSize } from "~/builder/shared/nano-states";
+import { $awareness, $temporaryInstances } from "../awareness";
+import { $systemDataByPage } from "../system";
 
 enableMapSet();
 // safari structuredClone fix
@@ -100,10 +101,6 @@ export const createObjectPool = () => {
     new NanostoresSyncObject(
       "selectedInstanceBrowserStyle",
       $selectedInstanceBrowserStyle
-    ),
-    new NanostoresSyncObject(
-      "selectedInstanceIntanceToTag",
-      $selectedInstanceIntanceToTag
     ),
     new NanostoresSyncObject(
       "selectedInstanceUnitSizes",
@@ -167,7 +164,9 @@ export const createObjectPool = () => {
       "registeredComponentPropsMetas",
       $registeredComponentPropsMetas
     ),
+    new NanostoresSyncObject("registeredTemplates", $registeredTemplates),
     new NanostoresSyncObject("canvasScrollbarWidth", $canvasScrollbarSize),
+    new NanostoresSyncObject("systemDataByPage", $systemDataByPage),
   ]);
 };
 

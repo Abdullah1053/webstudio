@@ -9,18 +9,18 @@ import {
   FloatingPanel,
 } from "@webstudio-is/design-system";
 import { propertyDescriptions } from "@webstudio-is/css-data";
-import type { StyleProperty } from "@webstudio-is/css-engine";
+import type { CssProperty } from "@webstudio-is/css-engine";
 import {
-  CrossSmallIcon,
+  XSmallIcon,
   EllipsesIcon,
-  TextDirectionLTRIcon,
-  TextDirectionRTLIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
   TextAlignCenterIcon,
   TextAlignJustifyIcon,
   TextAlignLeftIcon,
   TextAlignRightIcon,
   TextCapitalizeIcon,
-  TextHyphenIcon,
+  MinusIcon,
   TextItalicIcon,
   TextLowercaseIcon,
   TextStrikethroughIcon,
@@ -44,28 +44,28 @@ import {
 import { useComputedStyles } from "../../shared/model";
 import { createBatchUpdate } from "../../shared/use-style-data";
 
-const advancedProperties: StyleProperty[] = [
-  "whiteSpaceCollapse",
-  "textWrapMode",
-  "textWrapStyle",
+const advancedProperties: CssProperty[] = [
+  "white-space-collapse",
+  "text-wrap-mode",
+  "text-wrap-style",
   "direction",
   "hyphens",
-  "textOverflow",
+  "text-overflow",
 ];
 
 export const properties = [
-  "fontFamily",
-  "fontWeight",
-  "fontSize",
-  "lineHeight",
+  "font-family",
+  "font-weight",
+  "font-size",
+  "line-height",
   "color",
-  "textAlign",
-  "fontStyle",
-  "textDecorationLine",
-  "letterSpacing",
-  "textTransform",
+  "text-align",
+  "font-style",
+  "text-decoration-line",
+  "letter-spacing",
+  "text-transform",
   ...advancedProperties,
-] satisfies Array<StyleProperty>;
+] satisfies CssProperty[];
 
 export const Section = () => {
   return (
@@ -85,13 +85,13 @@ const TypographySectionFont = () => {
       <PropertyLabel
         label="Family"
         description={propertyDescriptions.fontFamily}
-        properties={["fontFamily"]}
+        properties={["font-family"]}
       />
       <FontFamilyControl />
       <PropertyLabel
         label="Weight"
         description={propertyDescriptions.fontWeight}
-        properties={["fontWeight"]}
+        properties={["font-weight"]}
       />
       <FontWeightControl />
       <PropertyLabel
@@ -111,25 +111,25 @@ const TypographySectionSizing = () => {
         <PropertyLabel
           label="Size"
           description={propertyDescriptions.fontSize}
-          properties={["fontSize"]}
+          properties={["font-size"]}
         />
-        <TextControl property="fontSize" />
+        <TextControl property="font-size" />
       </Grid>
       <Grid gap="1">
         <PropertyLabel
           label="Height"
           description={propertyDescriptions.lineHeight}
-          properties={["lineHeight"]}
+          properties={["line-height"]}
         />
-        <TextControl property="lineHeight" />
+        <TextControl property="line-height" />
       </Grid>
       <Grid gap="1">
         <PropertyLabel
           label="Spacing"
           description={propertyDescriptions.letterSpacing}
-          properties={["letterSpacing"]}
+          properties={["letter-spacing"]}
         />
-        <TextControl property="letterSpacing" />
+        <TextControl property="letter-spacing" />
       </Grid>
     </Grid>
   );
@@ -139,7 +139,7 @@ const TypographySectionAdvanced = () => {
   return (
     <Grid gap="2" columns="2">
       <ToggleGroupControl
-        properties={["textAlign"]}
+        properties={["text-align"]}
         items={[
           {
             child: <TextAlignLeftIcon />,
@@ -165,10 +165,10 @@ const TypographySectionAdvanced = () => {
         ]}
       />
       <ToggleGroupControl
-        properties={["textDecorationLine"]}
+        properties={["text-decoration-line"]}
         items={[
           {
-            child: <CrossSmallIcon />,
+            child: <XSmallIcon />,
             description: "No decoration is applied to the text.",
             value: "none",
           },
@@ -186,10 +186,10 @@ const TypographySectionAdvanced = () => {
         ]}
       />
       <ToggleGroupControl
-        properties={["textTransform"]}
+        properties={["text-transform"]}
         items={[
           {
-            child: <CrossSmallIcon />,
+            child: <XSmallIcon />,
             description:
               "No transformation is applied to the text. The text appears as it is.",
             value: "none",
@@ -216,10 +216,10 @@ const TypographySectionAdvanced = () => {
       />
       <Grid align="end" gap="1" css={{ gridTemplateColumns: "3fr 1fr" }}>
         <ToggleGroupControl
-          properties={["fontStyle"]}
+          properties={["font-style"]}
           items={[
             {
-              child: <CrossSmallIcon />,
+              child: <XSmallIcon />,
               description:
                 "The default value. The text appears in a normal, upright style.",
               value: "normal",
@@ -291,21 +291,21 @@ const TypographySectionAdvancedPopover = () => {
             <PropertyLabel
               label="White Space"
               description={propertyDescriptions.whiteSpaceCollapse}
-              properties={["whiteSpaceCollapse"]}
+              properties={["white-space-collapse"]}
             />
-            <SelectControl property="whiteSpaceCollapse" />
+            <SelectControl property="white-space-collapse" />
             <PropertyLabel
               label="Wrap Mode"
               description={propertyDescriptions.textWrapMode}
-              properties={["textWrapMode"]}
+              properties={["text-wrap-mode"]}
             />
-            <SelectControl property="textWrapMode" />
+            <SelectControl property="text-wrap-mode" />
             <PropertyLabel
               label="Wrap Style"
               description={propertyDescriptions.textWrapStyle}
-              properties={["textWrapStyle"]}
+              properties={["text-wrap-style"]}
             />
-            <SelectControl property="textWrapStyle" />
+            <SelectControl property="text-wrap-style" />
             <PropertyLabel
               label="Direction"
               description={propertyDescriptions.direction}
@@ -316,13 +316,13 @@ const TypographySectionAdvancedPopover = () => {
                 properties={["direction"]}
                 items={[
                   {
-                    child: <TextDirectionLTRIcon />,
+                    child: <ArrowRightIcon />,
                     description:
                       "Sets the text direction to left-to-right, which is the default for most languages.",
                     value: "ltr",
                   },
                   {
-                    child: <TextDirectionRTLIcon />,
+                    child: <ArrowLeftIcon />,
                     description:
                       "Sets the text direction to right-to-left, typically used for languages such as Arabic or Hebrew.",
                     value: "rtl",
@@ -340,13 +340,13 @@ const TypographySectionAdvancedPopover = () => {
                 properties={["hyphens"]}
                 items={[
                   {
-                    child: <CrossSmallIcon />,
+                    child: <XSmallIcon />,
                     description:
                       "Disables hyphenation of words. Words will not be hyphenated even if they exceed the width of their container.",
                     value: "manual",
                   },
                   {
-                    child: <TextHyphenIcon />,
+                    child: <MinusIcon />,
                     description:
                       "Enables automatic hyphenation of words. The browser will hyphenate long words at appropriate points to fit within the width of their container.",
                     value: "auto",
@@ -357,14 +357,14 @@ const TypographySectionAdvancedPopover = () => {
             <PropertyLabel
               label="Text Overflow"
               description={propertyDescriptions.textOverflow}
-              properties={["textOverflow"]}
+              properties={["text-overflow"]}
             />
             <Box css={{ justifySelf: "end" }}>
               <ToggleGroupControl
-                properties={["textOverflow"]}
+                properties={["text-overflow"]}
                 items={[
                   {
-                    child: <CrossSmallIcon />,
+                    child: <XSmallIcon />,
                     description:
                       "The overflowing text is clipped and hidden without any indication.",
                     value: "clip",

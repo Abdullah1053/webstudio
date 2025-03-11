@@ -21,10 +21,7 @@ import {
   type ItemMode,
 } from "@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item";
 import { autoScrollWindowForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
-import {
-  ChevronFilledDownIcon,
-  ChevronFilledRightIcon,
-} from "@webstudio-is/icons";
+import { ChevronDownIcon, ChevronRightIcon } from "@webstudio-is/icons";
 import { styled, theme } from "../stitches.config";
 import { Box } from "./box";
 import { Text } from "./text";
@@ -32,17 +29,16 @@ import { TreePositionIndicator } from "./list-position-indicator";
 
 const treeNodeLevel = "--tree-node-level";
 const treeNodeOutline = "--tree-node-outline";
+const treeNodeBackgroundColor = "--tree-node-background-color";
 const treeActionOpacity = "--tree-action-opacity";
 const treeDepthBarsVisibility = "--tree-depth-bars-visibility";
 const treeDepthBarsColor = "--tree-depth-bars-color";
 
-const ITEM_HEIGHT = 32;
 const ITEM_PADDING_LEFT = 8;
 // extra padding on the right to make sure scrollbar doesn't obscure anything
 const ITEM_PADDING_RIGHT = 10;
 const BARS_GAP = 16;
 const EXPAND_WIDTH = 24;
-const ACTION_WIDTH = 24;
 
 const TreeContainer = ({ children }: { children: ReactNode }) => {
   const focusManager = useFocusManager();
@@ -98,17 +94,16 @@ export const TreeRoot = ({ children }: { children: ReactNode }) => {
 
 const NodeContainer = styled("div", {
   position: "relative",
-  height: ITEM_HEIGHT,
+  height: theme.sizes.controlHeight,
   "&:hover, &:has(:focus-visible), &:has([aria-current=true])": {
-    backgroundColor: theme.colors.backgroundHover,
+    [treeNodeBackgroundColor]: theme.colors.backgroundHover,
+    backgroundColor: `var(${treeNodeBackgroundColor})`,
     [treeActionOpacity]: 1,
   },
   "&:has([aria-selected=true])": {
-    backgroundColor: theme.colors.backgroundItemCurrent,
+    [treeNodeBackgroundColor]: theme.colors.backgroundItemCurrent,
+    backgroundColor: `var(${treeNodeBackgroundColor})`,
     [treeDepthBarsColor]: theme.colors.borderItemChildLineCurrent,
-  },
-  "&:has([data-tree-action])": {
-    paddingRight: ACTION_WIDTH,
   },
 });
 
@@ -160,14 +155,16 @@ const ActionContainer = styled("div", {
   // use opacity to hide action instead of visibility
   // to prevent focus loss while navigating with keyboard
   opacity: `var(${treeActionOpacity}, 0)`,
-  position: "absolute",
-  top: 0,
-  right: ITEM_PADDING_RIGHT,
-  width: ACTION_WIDTH,
+  position: "sticky",
+  translate: `calc(${theme.sizes.sidebarWidth} - 100%) -100%`,
+  paddingLeft: ITEM_PADDING_LEFT,
+  paddingRight: ITEM_PADDING_RIGHT,
+  left: 0,
   height: "inherit",
-  display: "flex",
+  display: "inline-flex",
   justifyContent: "center",
   alignItems: "center",
+  backgroundColor: `var(${treeNodeBackgroundColor})`,
 });
 
 const DropIndicator = ({
@@ -485,7 +482,11 @@ export const TreeNode = ({
           tabIndex={-1}
           onClick={(event) => onExpand?.(isExpanded === false, event.altKey)}
         >
-          {isExpanded ? <ChevronFilledDownIcon /> : <ChevronFilledRightIcon />}
+          {isExpanded ? (
+            <ChevronDownIcon size="12" />
+          ) : (
+            <ChevronRightIcon size="12" />
+          )}
         </ExpandButton>
       )}
       {action && <ActionContainer data-tree-action>{action}</ActionContainer>}

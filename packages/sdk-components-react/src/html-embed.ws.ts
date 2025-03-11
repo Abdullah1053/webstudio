@@ -3,7 +3,7 @@ import type {
   PresetStyle,
   WsComponentMeta,
   WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
+} from "@webstudio-is/sdk";
 import { props } from "./__generated__/html-embed.props";
 
 const presetStyle = {
@@ -13,7 +13,7 @@ const presetStyle = {
       value: { type: "keyword", value: "contents" },
     },
     {
-      property: "whiteSpaceCollapse",
+      property: "white-space-collapse",
       value: { type: "keyword", value: "collapse" },
     },
   ],
@@ -26,7 +26,7 @@ export const meta: WsComponentMeta = {
   description: "Used to add HTML code to the page, such as an SVG or script.",
   icon: EmbedIcon,
   presetStyle,
-  order: 8,
+  order: 2,
 };
 
 export const propsMeta: WsComponentPropsMeta = {

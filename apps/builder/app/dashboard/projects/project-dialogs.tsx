@@ -154,7 +154,7 @@ const useCreateProject = () => {
 };
 
 export const CreateProject = ({
-  buttonText = "New Project",
+  buttonText = "New blank project",
 }: {
   buttonText?: string;
 }) => {
@@ -163,12 +163,12 @@ export const CreateProject = ({
   return (
     <Dialog
       title="New Project"
-      trigger={<Button prefix={<PlusIcon />}>{buttonText}</Button>}
+      trigger={<Button prefix={<PlusIcon size={12} />}>{buttonText}</Button>}
       onOpenChange={handleOpenChange}
     >
       <DialogContent
         onSubmit={handleSubmit}
-        placeholder="New Project"
+        placeholder="My Project"
         label="Project Title"
         errors={errors}
         primaryButton={

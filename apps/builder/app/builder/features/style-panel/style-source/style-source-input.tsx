@@ -13,6 +13,7 @@
 
 import { nanoid } from "nanoid";
 import { useFocusWithin } from "@react-aria/interactions";
+import { useStore } from "@nanostores/react";
 import {
   Box,
   ComboboxListbox,
@@ -30,11 +31,13 @@ import {
   rawTheme,
   theme,
   styled,
-  Flex,
   ComboboxScrollArea,
   InputField,
+  Flex,
+  Text,
 } from "@webstudio-is/design-system";
-import { CheckMarkIcon, DotIcon, LocalStyleIcon } from "@webstudio-is/icons";
+import { CheckMarkIcon, DotIcon } from "@webstudio-is/icons";
+import type { StyleSource } from "@webstudio-is/sdk";
 import {
   forwardRef,
   useState,
@@ -47,7 +50,7 @@ import {
   useCallback,
 } from "react";
 import { mergeRefs } from "@react-aria/utils";
-import { type ComponentState, stateCategories } from "@webstudio-is/react-sdk";
+import { type ComponentState, stateCategories } from "@webstudio-is/sdk";
 import {
   type ItemSource,
   type StyleSourceError,
@@ -58,9 +61,10 @@ import { useSortable } from "./use-sortable";
 import { matchSorter } from "match-sorter";
 import { StyleSourceBadge } from "./style-source-badge";
 import { humanizeString } from "~/shared/string-utils";
+import { $definedStyles, type DefinedStyleDecl } from "../shared/model";
 
 type IntermediateItem = {
-  id: string;
+  id: StyleSource["id"];
   label: string;
   disabled: boolean;
   source: ItemSource;
@@ -69,7 +73,7 @@ type IntermediateItem = {
 };
 
 export type ItemSelector = {
-  styleSourceId: IntermediateItem["id"];
+  styleSourceId: StyleSource["id"];
   state?: string;
 };
 
@@ -80,10 +84,13 @@ const TextFieldContainer = styled("div", {
   alignItems: "center",
   backgroundColor: theme.colors.backgroundControls,
   gap: theme.spacing[2],
-  p: theme.spacing[2],
+  padding: theme.spacing[2],
   borderRadius: theme.borderRadius[4],
   minWidth: 0,
-  border: `1px solid ${theme.colors.borderMain}`,
+  border: `1px solid transparent`,
+  "&:hover": {
+    borderColor: theme.colors.borderMain,
+  },
   "&:focus-within": {
     borderColor: theme.colors.borderFocus,
   },
@@ -99,7 +106,7 @@ type TextFieldBaseWrapperProps<Item extends IntermediateItem> = Omit<
     label: string;
     containerRef?: RefObject<HTMLDivElement>;
     inputRef?: RefObject<HTMLInputElement>;
-    renderStyleSourceMenuItems: (item: Item) => ReactNode;
+    renderStyleSourceMenuItems: (item: Item, hasStyles: boolean) => ReactNode;
     onChangeItem?: (item: Item) => void;
     onSort?: (items: Array<Item>) => void;
     onSelectItem?: (itemSelector: ItemSelector) => void;
@@ -108,6 +115,27 @@ type TextFieldBaseWrapperProps<Item extends IntermediateItem> = Omit<
     states: { label: string; selector: string }[];
     error?: StyleSourceError;
   };
+
+// Returns true if style source has defined styles including on the states.
+const getHasStylesMap = <Item extends IntermediateItem>(
+  styleSourceItems: Array<Item>,
+  definedStyles: Set<Partial<DefinedStyleDecl>>
+) => {
+  const map = new Map<Item["id"], boolean>();
+  for (const item of styleSourceItems) {
+    // Style source has styles on states.
+    if (item.states.length > 0) {
+      map.set(item.id, true);
+    }
+    for (const style of definedStyles) {
+      if (item.id === style.styleSourceId) {
+        map.set(item.id, true);
+        break;
+      }
+    }
+  }
+  return map;
+};
 
 const TextFieldBase: ForwardRefRenderFunction<
   HTMLDivElement,
@@ -149,6 +177,16 @@ const TextFieldBase: ForwardRefRenderFunction<
     internalInputRef.current?.focus();
   }, [internalInputRef]);
 
+  const definedStyles = useStore($definedStyles);
+
+  const hasStyles = useCallback(
+    (styleSourceId: string) => {
+      const hasStylesMap = getHasStylesMap(value, definedStyles);
+      return hasStylesMap.get(styleSourceId) ?? false;
+    },
+    [value, definedStyles]
+  );
+
   return (
     <TextFieldContainer
       {...focusWithinProps}
@@ -166,32 +204,30 @@ const TextFieldBase: ForwardRefRenderFunction<
       onKeyDown={onKeyDown}
     >
       {/* We want input to be the first element in DOM so it receives the focus first */}
-      {editingItemId === undefined && (
-        <InputField
-          {...textFieldProps}
-          variant="chromeless"
-          css={{
-            fontVariantNumeric: "tabular-nums",
-            lineHeight: 1,
-            order: 1,
-            flex: 1,
-            "&:focus-within, &:hover": {
-              borderColor: "transparent",
-            },
-          }}
-          size="1"
-          value={label}
-          onClick={onClick}
-          ref={inputRef}
-          inputRef={internalInputRef}
-          spellCheck={false}
-          aria-label="New Style Source Input"
-        />
-      )}
+      <InputField
+        {...textFieldProps}
+        variant="chromeless"
+        css={{
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: 1,
+          order: 1,
+          flex: 1,
+          "&:focus-within, &:hover": {
+            borderColor: "transparent",
+          },
+        }}
+        size="1"
+        value={label}
+        onClick={onClick}
+        ref={inputRef}
+        inputRef={internalInputRef}
+        spellCheck={false}
+        aria-label="New Style Source Input"
+      />
       {value.map((item) => (
         <StyleSourceControl
           key={item.id}
-          menuItems={renderStyleSourceMenuItems(item)}
+          menuItems={renderStyleSourceMenuItems(item, hasStyles(item.id))}
           id={item.id}
           selected={item.id === selectedItemSelector?.styleSourceId}
           state={
@@ -199,6 +235,7 @@ const TextFieldBase: ForwardRefRenderFunction<
               ? selectedItemSelector.state
               : undefined
           }
+          label={item.label}
           stateLabel={
             item.id === selectedItemSelector?.styleSourceId
               ? states.find(
@@ -210,6 +247,7 @@ const TextFieldBase: ForwardRefRenderFunction<
           disabled={item.disabled}
           isDragging={item.id === dragItemId}
           isEditing={item.id === editingItemId}
+          hasStyles={hasStyles(item.id)}
           source={item.source}
           onChangeEditing={(isEditing) => {
             onEditItem?.(isEditing ? item.id : undefined);
@@ -219,15 +257,7 @@ const TextFieldBase: ForwardRefRenderFunction<
             onEditItem?.();
             onChangeItem?.({ ...item, label });
           }}
-        >
-          {item.source === "local" ? (
-            <Flex align="center" justify="center">
-              <LocalStyleIcon />
-            </Flex>
-          ) : (
-            item.label
-          )}
-        </StyleSourceControl>
+        />
       ))}
       {placementIndicator}
     </TextFieldContainer>
@@ -245,7 +275,7 @@ type StyleSourceInputProps<Item extends IntermediateItem> = {
   editingItemId?: Item["id"];
   componentStates?: ComponentState[];
   onSelectAutocompleteItem?: (item: Item) => void;
-  onRemoveItem?: (id: Item["id"]) => void;
+  onDetachItem?: (id: Item["id"]) => void;
   onDeleteItem?: (id: Item["id"]) => void;
   onClearStyles?: (id: Item["id"]) => void;
   onDuplicateItem?: (id: Item["id"]) => void;
@@ -311,6 +341,7 @@ const markAddedValues = <Item extends IntermediateItem>(
 const renderMenuItems = (props: {
   selectedItemSelector: undefined | ItemSelector;
   item: IntermediateItem;
+  hasStyles: boolean;
   states: ComponentState[];
   onSelect?: (itemSelector: ItemSelector) => void;
   onEdit?: (itemId: IntermediateItem["id"]) => void;
@@ -318,13 +349,22 @@ const renderMenuItems = (props: {
   onConvertToToken?: (itemId: IntermediateItem["id"]) => void;
   onDisable?: (itemId: IntermediateItem["id"]) => void;
   onEnable?: (itemId: IntermediateItem["id"]) => void;
-  onRemove?: (itemId: IntermediateItem["id"]) => void;
+  onDetach?: (itemId: IntermediateItem["id"]) => void;
   onDelete?: (itemId: IntermediateItem["id"]) => void;
   onClearStyles?: (itemId: IntermediateItem["id"]) => void;
 }) => {
   return (
     <>
-      <DropdownMenuLabel>{props.item.label}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        <Flex gap="1" justify="between" align="center">
+          <Text css={{ fontWeight: "bold" }} truncate>
+            {props.item.label}
+          </Text>
+          {props.hasStyles && (
+            <DotIcon size="12" color={rawTheme.colors.foregroundPrimary} />
+          )}
+        </Flex>
+      </DropdownMenuLabel>
       {props.item.source !== "local" && (
         <DropdownMenuItem onSelect={() => props.onEdit?.(props.item.id)}>
           Rename
@@ -362,8 +402,8 @@ const renderMenuItems = (props: {
     )}
     */}
       {props.item.source !== "local" && (
-        <DropdownMenuItem onSelect={() => props.onRemove?.(props.item.id)}>
-          Remove
+        <DropdownMenuItem onSelect={() => props.onDetach?.(props.item.id)}>
+          Detach
         </DropdownMenuItem>
       )}
       {props.item.source !== "local" && (
@@ -395,17 +435,16 @@ const renderMenuItems = (props: {
                 withIndicator={true}
                 icon={
                   props.item.id === props.selectedItemSelector?.styleSourceId &&
-                  selector === props.selectedItemSelector.state ? (
+                  selector === props.selectedItemSelector.state && (
                     <CheckMarkIcon
                       color={
                         props.item.states.includes(selector)
                           ? rawTheme.colors.foregroundPrimary
                           : rawTheme.colors.foregroundIconMain
                       }
+                      size={12}
                     />
-                  ) : props.item.states.includes(selector) ? (
-                    <DotIcon color={rawTheme.colors.foregroundPrimary} />
-                  ) : null
+                  )
                 }
                 onSelect={() =>
                   props.onSelect?.({
@@ -418,7 +457,15 @@ const renderMenuItems = (props: {
                   })
                 }
               >
-                {label}
+                <Flex justify="between" align="center" grow>
+                  {label}
+                  {props.item.states.includes(selector) && (
+                    <DotIcon
+                      size="12"
+                      color={rawTheme.colors.foregroundPrimary}
+                    />
+                  )}
+                </Flex>
               </DropdownMenuItem>
             ))}
           </Fragment>
@@ -488,7 +535,7 @@ export const StyleSourceInput = (
       ) {
         const item = value[value.length - 2];
         if (item) {
-          props.onRemoveItem?.(item.id);
+          props.onDetachItem?.(item.id);
         }
       }
     },
@@ -507,10 +554,11 @@ export const StyleSourceInput = (
             // @todo inputProps is any which breaks all types passed to TextField
             {...inputProps}
             error={props.error}
-            renderStyleSourceMenuItems={(item) =>
+            renderStyleSourceMenuItems={(item, hasStyles) =>
               renderMenuItems({
                 selectedItemSelector: props.selectedItemSelector,
                 item,
+                hasStyles,
                 states,
                 onSelect: props.onSelectItem,
                 onDuplicate: props.onDuplicateItem,
@@ -518,7 +566,7 @@ export const StyleSourceInput = (
                 onEnable: props.onEnableItem,
                 onDisable: props.onDisableItem,
                 onEdit: props.onEditItem,
-                onRemove: props.onRemoveItem,
+                onDetach: props.onDetachItem,
                 onDelete: props.onDeleteItem,
                 onClearStyles: props.onClearStyles,
               })

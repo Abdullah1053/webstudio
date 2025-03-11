@@ -4,19 +4,26 @@ import type { ExoticComponent } from "react";
 import { atom, computed } from "nanostores";
 import {
   type AnyComponent,
-  type WsComponentMeta,
-  type WsComponentPropsMeta,
   type Hook,
   type HookContext,
   namespaceMeta,
-  getIndexesWithinAncestors,
   type InstanceData,
 } from "@webstudio-is/react-sdk";
-import type { Instance } from "@webstudio-is/sdk";
+import {
+  getIndexesWithinAncestors,
+  type Instance,
+  type WsComponentMeta,
+  type WsComponentPropsMeta,
+} from "@webstudio-is/sdk";
 import type { InstanceSelector } from "../tree-utils";
 import { $memoryProps, $props } from "./misc";
 import { $instances } from "./instances";
 import { $awareness, $selectedPage, getInstanceKey } from "../awareness";
+import {
+  renderTemplate,
+  type GeneratedTemplateMeta,
+  type TemplateMeta,
+} from "@webstudio-is/template";
 
 const createHookContext = (): HookContext => {
   const metas = $registeredComponentMetas.get();
@@ -166,6 +173,10 @@ export const $registeredComponentMetas = atom(
   new Map<string, WsComponentMeta>()
 );
 
+export const $registeredTemplates = atom(
+  new Map<string, GeneratedTemplateMeta>()
+);
+
 export const $registeredComponentPropsMetas = atom(
   new Map<string, WsComponentPropsMeta>()
 );
@@ -176,6 +187,7 @@ export const registerComponentLibrary = ({
   metas,
   propsMetas,
   hooks,
+  templates,
 }: {
   namespace?: string;
   // simplify adding component libraries
@@ -184,6 +196,7 @@ export const registerComponentLibrary = ({
   metas: Record<Instance["component"], WsComponentMeta>;
   propsMetas: Record<Instance["component"], WsComponentPropsMeta>;
   hooks?: Hook[];
+  templates: Record<Instance["component"], TemplateMeta>;
 }) => {
   const prefix = namespace === undefined ? "" : `${namespace}:`;
 
@@ -205,6 +218,17 @@ export const registerComponentLibrary = ({
     );
   }
   $registeredComponentMetas.set(nextMetas);
+
+  const prevTemplates = $registeredTemplates.get();
+  const nextTemplates = new Map(prevTemplates);
+  for (const [componentName, meta] of Object.entries(templates)) {
+    const { template, ...generatedMeta } = meta;
+    nextTemplates.set(`${prefix}${componentName}`, {
+      ...generatedMeta,
+      template: renderTemplate(template),
+    });
+  }
+  $registeredTemplates.set(nextTemplates);
 
   if (hooks) {
     const prevHooks = $registeredComponentHooks.get();

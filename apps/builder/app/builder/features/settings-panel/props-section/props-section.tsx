@@ -2,7 +2,7 @@ import { computed } from "nanostores";
 import { useState } from "react";
 import { useStore } from "@nanostores/react";
 import { matchSorter } from "match-sorter";
-import type { Instance } from "@webstudio-is/sdk";
+import { type Instance, descendantComponent } from "@webstudio-is/sdk";
 import {
   theme,
   Combobox,
@@ -11,10 +11,7 @@ import {
   Box,
   Grid,
 } from "@webstudio-is/design-system";
-import {
-  descendantComponent,
-  isAttributeNameSafe,
-} from "@webstudio-is/react-sdk";
+import { isAttributeNameSafe } from "@webstudio-is/react-sdk";
 import {
   $propValuesByInstanceSelector,
   $propsIndex,
@@ -27,6 +24,7 @@ import { renderControl } from "../controls/combined";
 import { usePropsLogic, type PropAndMeta } from "./use-props-logic";
 import { serverSyncStore } from "~/shared/sync";
 import { $selectedInstanceKey } from "~/shared/awareness";
+import { AnimateSection } from "./animation/animation-section";
 
 type Item = {
   name: string;
@@ -71,7 +69,11 @@ const renderProperty = (
     prop,
     computedValue: propValues.get(propName) ?? meta.defaultValue,
     propName,
-    deletable: deletable ?? false,
+    deletable:
+      deletable ??
+      ((meta.defaultValue === undefined || meta.defaultValue !== prop?.value) &&
+        meta.required === false &&
+        prop !== undefined),
     onDelete: () => {
       if (prop) {
         logic.handleDelete(prop);
@@ -164,10 +166,29 @@ export const PropsSection = (props: PropsSectionProps) => {
   const hasItems =
     logic.addedProps.length > 0 || addingProp || logic.initialProps.length > 0;
 
+  const animationAction = logic.initialProps.find(
+    (prop) => prop.meta.type === "animationAction"
+  );
+
+  const hasAnimation = animationAction !== undefined;
+
   const showPropertiesSection =
     isDesignMode || (isContentMode && logic.initialProps.length > 0);
 
-  return (
+  return hasAnimation ? (
+    <>
+      <AnimateSection
+        animationAction={animationAction}
+        onChange={(value) =>
+          logic.handleChangeByPropName(animationAction.propName, {
+            type: "animationAction",
+            value,
+          })
+        }
+      />
+      <Separator />
+    </>
+  ) : (
     <>
       <Grid
         css={{

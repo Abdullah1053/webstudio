@@ -1,11 +1,11 @@
 import { z } from "zod";
+import { WsEmbedTemplate } from "@webstudio-is/sdk";
+import { generateDataFromEmbedTemplate } from "@webstudio-is/react-sdk";
+import { $registeredComponentMetas } from "../nano-states";
 import {
-  WsEmbedTemplate,
-  generateDataFromEmbedTemplate,
-} from "@webstudio-is/react-sdk";
-import { $registeredComponentMetas, $breakpoints } from "../nano-states";
-import { findClosestInsertable, insertTemplateData } from "../instance-utils";
-import { isBaseBreakpoint } from "../breakpoints";
+  findClosestInsertable,
+  insertWebstudioFragmentAt,
+} from "../instance-utils";
 
 const version = "@webstudio/template";
 
@@ -28,21 +28,11 @@ export const onPaste = (clipboardData: string) => {
     return false;
   }
   const metas = $registeredComponentMetas.get();
-  const breakpoints = $breakpoints.get();
-  const breakpointValues = Array.from(breakpoints.values());
-  const baseBreakpoint = breakpointValues.find(isBaseBreakpoint);
-  if (baseBreakpoint === undefined) {
-    return false;
-  }
-  const fragment = generateDataFromEmbedTemplate(
-    template,
-    metas,
-    baseBreakpoint.id
-  );
+  const fragment = generateDataFromEmbedTemplate(template, metas);
   const insertable = findClosestInsertable(fragment);
   if (insertable === undefined) {
     return false;
   }
-  insertTemplateData(fragment, insertable);
+  insertWebstudioFragmentAt(fragment, insertable);
   return true;
 };

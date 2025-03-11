@@ -21,7 +21,6 @@ import type { MarketplaceProduct } from "@webstudio-is/project-build";
 import type { TokenPermissions } from "@webstudio-is/authorization-token";
 import type { DragStartPayload } from "~/canvas/shared/use-drag-drop";
 import { type InstanceSelector } from "../tree-utils";
-import type { HtmlTags } from "html-tags";
 import { $selectedInstanceSelector } from "./instances";
 import type { UnitSizes } from "~/builder/features/style-panel/shared/css-value-input/convert-units";
 import type { Simplify } from "type-fest";
@@ -63,10 +62,25 @@ export const $propsIndex = computed($props, (props) => {
   };
 });
 
+/**
+ * $styles contains actual styling rules
+ * (breakpointId, styleSourceId, property, value, listed), tied to styleSourceIds
+ * $styles.styleSourceId -> $styleSources.id
+ */
 export const $styles = atom<Styles>(new Map());
 
+/**
+ * styleSources defines where styles come from (local or token).
+ *
+ * $styles contains actual styling rules, tied to styleSourceIds.
+ * $styles.styleSourceId -> $styleSources.id
+ */
 export const $styleSources = atom<StyleSources>(new Map());
 
+/**
+ * This is a list of connections between instances (instanceIds) and styleSources.
+ * $styleSourceSelections.values[] -> $styleSources.id[]
+ */
 export const $styleSourceSelections = atom<StyleSourceSelections>(new Map());
 
 export type StyleSourceSelector = {
@@ -158,13 +172,6 @@ export const $selectedInstanceUnitSizes = atom<UnitSizes>({
   rem: 16,
   px: 1,
 });
-
-/**
- * instanceId => tagName store for selected instance and its ancestors
- */
-export const $selectedInstanceIntanceToTag = atom<
-  undefined | Map<Instance["id"], HtmlTags>
->();
 
 /**
  * pending means: previous selected instance unmounted,

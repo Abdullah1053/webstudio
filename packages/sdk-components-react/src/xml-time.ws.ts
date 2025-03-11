@@ -1,10 +1,5 @@
 import { CalendarIcon } from "@webstudio-is/icons/svg";
-
-import {
-  type WsComponentMeta,
-  type WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
-
+import type { WsComponentMeta, WsComponentPropsMeta } from "@webstudio-is/sdk";
 import { props } from "./__generated__/xml-time.props";
 
 export const meta: WsComponentMeta = {
@@ -12,7 +7,6 @@ export const meta: WsComponentMeta = {
   type: "container",
   description: "Converts machine-readable date and time to ISO format.",
   icon: CalendarIcon,
-  stylable: false,
   order: 7,
 };
 

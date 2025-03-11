@@ -19,6 +19,7 @@ import {
   Text,
 } from "@webstudio-is/design-system";
 import type {
+  CssProperty,
   KeywordValue,
   StyleProperty,
   StyleValue,
@@ -35,14 +36,16 @@ import {
   useState,
   useMemo,
   type ComponentProps,
+  type RefObject,
 } from "react";
-import { useUnitSelect } from "./unit-select";
+import { useUnitSelect, type UnitOption } from "./unit-select";
 import { parseIntermediateOrInvalidValue } from "./parse-intermediate-or-invalid-value";
-import { toValue } from "@webstudio-is/css-engine";
+import { hyphenateProperty, toValue } from "@webstudio-is/css-engine";
 import {
+  camelCaseProperty,
   declarationDescriptions,
   isValidDeclaration,
-  properties,
+  propertiesData,
 } from "@webstudio-is/css-data";
 import {
   $selectedInstanceBrowserStyle,
@@ -58,11 +61,12 @@ import {
   isComplexValue,
   ValueEditorDialog,
 } from "./value-editor-dialog";
+import { useEffectEvent } from "~/shared/hook-utils/effect-event";
 
 // We need to enable scrub on properties that can have numeric value.
 const canBeNumber = (property: StyleProperty, value: CssValueInputValue) => {
   const unitGroups =
-    properties[property as keyof typeof properties]?.unitGroups ?? [];
+    propertiesData[hyphenateProperty(property)]?.unitGroups ?? [];
   // allow scrubbing css variables with unit value
   return unitGroups.length !== 0 || value.type === "unit";
 };
@@ -81,31 +85,45 @@ const scrubUnitAcceleration = new Map<Unit, number>([
 
 const useScrub = ({
   value,
+  intermediateValue,
+  defaultUnit,
   property,
   onChange,
   onChangeComplete,
+  onAbort,
   shouldHandleEvent,
 }: {
+  defaultUnit: Unit | undefined;
   value: CssValueInputValue;
+  intermediateValue: CssValueInputValue | undefined;
   property: StyleProperty;
-  onChange: (value: CssValueInputValue) => void;
+  onChange: (value: CssValueInputValue | undefined) => void;
   onChangeComplete: (value: StyleValue) => void;
+  onAbort: () => void;
   shouldHandleEvent?: (node: Node) => boolean;
 }): [
-  React.RefObject<HTMLDivElement | null>,
-  React.RefObject<HTMLInputElement | null>,
+  RefObject<HTMLInputElement | null>,
+  RefObject<HTMLInputElement | null>,
 ] => {
-  const scrubRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const scrubRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const onChangeRef = useRef(onChange);
   const onChangeCompleteRef = useRef(onChangeComplete);
   const valueRef = useRef(value);
 
+  const intermediateValueRef = useRef(intermediateValue);
+
   onChangeCompleteRef.current = onChangeComplete;
   onChangeRef.current = onChange;
 
   valueRef.current = value;
+
+  const updateIntermediateValue = useEffectEvent(() => {
+    intermediateValueRef.current = intermediateValue;
+  });
+
+  const onAbortStable = useEffectEvent(onAbort);
 
   // const type = valueRef.current.type;
 
@@ -124,7 +142,7 @@ const useScrub = ({
       return;
     }
 
-    let unit: Unit = "number";
+    let unit: Unit = defaultUnit ?? "number";
 
     const validateValue = (numericValue: number) => {
       let value: CssValueInputValue = {
@@ -193,6 +211,20 @@ const useScrub = ({
         if (valueRef.current.type === "unit") {
           unit = valueRef.current.unit;
         }
+
+        updateIntermediateValue();
+      },
+      onAbort() {
+        onAbortStable();
+        // Returning focus that we've moved above
+        scrubRef.current?.removeAttribute("tabindex");
+        onChangeRef.current(intermediateValueRef.current);
+
+        // Otherwise selectionchange event can be triggered after 300-1000ms after focus
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        });
       },
       onValueInput(event) {
         // Moving focus to container of the input to hide the caret
@@ -212,12 +244,22 @@ const useScrub = ({
 
         // Returning focus that we've moved above
         scrubRef.current?.removeAttribute("tabindex");
-        inputRef.current?.focus();
-        inputRef.current?.select();
+
+        // Otherwise selectionchange event can be triggered after 300-1000ms after focus
+        requestAnimationFrame(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        });
       },
       shouldHandleEvent,
     });
-  }, [shouldHandleEvent, property]);
+  }, [
+    shouldHandleEvent,
+    property,
+    updateIntermediateValue,
+    onAbortStable,
+    defaultUnit,
+  ]);
 
   return [scrubRef, inputRef];
 };
@@ -263,20 +305,27 @@ type CssValueInputProps = Pick<
   | "inputRef"
 > & {
   styleSource: StyleValueSourceColor;
-  property: StyleProperty;
+  property: StyleProperty | CssProperty;
   value: StyleValue | undefined;
   intermediateValue: CssValueInputValue | undefined;
   /**
    * Selected item in the dropdown
    */
-  getOptions?: () => Array<KeywordValue | VarValue>;
+  getOptions?: () => Array<
+    KeywordValue | VarValue | (KeywordValue & { description?: string })
+  >;
   onChange: (value: CssValueInputValue | undefined) => void;
   onChangeComplete: (event: ChangeCompleteEvent) => void;
   onHighlight: (value: StyleValue | undefined) => void;
+  // Does not reset intermediate changes.
   onAbort: () => void;
+  // Resets the value to default even if it has intermediate changes.
   onReset: () => void;
   icon?: ReactNode;
   showSuffix?: boolean;
+  unitOptions?: UnitOption[];
+  id?: string;
+  placeholder?: string;
 };
 
 const initialValue: IntermediateStyleValue = {
@@ -423,12 +472,13 @@ const Description = styled(Box, { width: theme.spacing[27] });
  * - Evaluated math expression: "2px + 3em" (like CSS calc())
  */
 export const CssValueInput = ({
+  id,
   autoFocus,
   icon,
   prefix,
   showSuffix = true,
   styleSource,
-  property,
+  property: multiCaseProperty,
   getOptions = () => [],
   onHighlight,
   onAbort,
@@ -438,16 +488,21 @@ export const CssValueInput = ({
   fieldSizing,
   variant,
   text,
+  unitOptions,
+  placeholder,
   ...props
 }: CssValueInputProps) => {
+  const property = camelCaseProperty(multiCaseProperty);
   const value = props.intermediateValue ?? props.value ?? initialValue;
   const valueRef = useRef(value);
   valueRef.current = value;
-
   // Used to show description
   const [highlightedValue, setHighlighedValue] = useState<
     StyleValue | undefined
   >();
+
+  const defaultUnit =
+    unitOptions?.[0]?.type === "unit" ? unitOptions[0].id : undefined;
 
   const onChange = (input: string | undefined) => {
     if (input === undefined) {
@@ -494,7 +549,11 @@ export const CssValueInput = ({
       return;
     }
 
-    const parsedValue = parseIntermediateOrInvalidValue(property, value);
+    const parsedValue = parseIntermediateOrInvalidValue(
+      property,
+      value,
+      defaultUnit
+    );
 
     if (parsedValue.type === "invalid") {
       props.onChange(parsedValue);
@@ -521,6 +580,7 @@ export const CssValueInput = ({
     highlightedIndex,
     closeMenu,
   } = useCombobox<CssValueInputValue>({
+    inputId: id,
     // Used for description to match the item when nothing is highlighted yet and value is still in non keyword mode
     getItems: getOptions,
     value,
@@ -549,7 +609,8 @@ export const CssValueInput = ({
   const inputProps = getInputProps();
 
   const [isUnitsOpen, unitSelectElement] = useUnitSelect({
-    property,
+    options: unitOptions,
+    property: hyphenateProperty(multiCaseProperty),
     value,
     onChange: (unitOrKeyword) => {
       if (unitOrKeyword.type === "keyword") {
@@ -650,11 +711,14 @@ export const CssValueInput = ({
   }, []);
 
   const [scrubRef, inputRef] = useScrub({
+    defaultUnit,
     value,
     property,
+    intermediateValue: props.intermediateValue,
     onChange: props.onChange,
     onChangeComplete: (value) => onChangeComplete({ value, type: "scrub-end" }),
     shouldHandleEvent,
+    onAbort,
   });
 
   const menuProps = getMenuProps();
@@ -728,10 +792,22 @@ export const CssValueInput = ({
             : undefined;
 
   if (valueForDescription) {
-    const key = `${property}:${toValue(
-      valueForDescription
-    )}` as keyof typeof declarationDescriptions;
-    description = declarationDescriptions[key];
+    const option = getOptions().find(
+      (item) =>
+        item.type === "keyword" && item.value === valueForDescription.value
+    );
+    if (
+      option !== undefined &&
+      "description" in option &&
+      option?.description
+    ) {
+      description = option.description;
+    } else {
+      const key = `${property}:${toValue(
+        valueForDescription
+      )}` as keyof typeof declarationDescriptions;
+      description = declarationDescriptions[key];
+    }
   } else if (highlightedValue?.type === "var") {
     description = "CSS custom property (variable)";
   } else if (highlightedValue === undefined) {
@@ -794,7 +870,7 @@ export const CssValueInput = ({
     }
   };
 
-  const handleMetaEnter = (event: KeyboardEvent<HTMLInputElement>) => {
+  const handleEnter = (event: KeyboardEvent<HTMLInputElement>) => {
     if (
       isUnitsOpen ||
       (isOpen && !menuProps.empty && highlightedIndex !== -1)
@@ -809,6 +885,16 @@ export const CssValueInput = ({
     }
   };
 
+  const handleDelete = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Backspace" && inputProps.value === "") {
+      // - allows to close the menu
+      // - prevents baspace from deleting the value AFTER its already reseted to default, e.g. we get "aut" instead of "auto"
+      event.preventDefault();
+      closeMenu();
+      onReset();
+    }
+  };
+
   const { abort, ...autoScrollProps } = useMemo(() => {
     return getAutoScrollProps();
   }, []);
@@ -817,12 +903,50 @@ export const CssValueInput = ({
     return () => abort("unmount");
   }, [abort]);
 
+  useEffect(() => {
+    if (inputRef.current === null) {
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    const options = {
+      signal: abortController.signal,
+    };
+
+    let focusTime = 0;
+    inputRef.current.addEventListener(
+      "selectionchange",
+      () => {
+        if (Date.now() - focusTime < 150) {
+          inputRef.current?.select();
+        }
+      },
+      options
+    );
+    inputRef.current.addEventListener(
+      "focus",
+      () => {
+        if (inputRef.current === null) {
+          return;
+        }
+
+        focusTime = Date.now();
+      },
+      options
+    );
+
+    return () => {
+      abortController.abort();
+    };
+  }, [inputRef]);
+
   const inputPropsHandleKeyDown = composeEventHandlers(
-    composeEventHandlers(handleUpDownNumeric, inputProps.onKeyDown, {
+    [handleUpDownNumeric, inputProps.onKeyDown, handleEnter, handleDelete],
+    {
       // Pass prevented events to the combobox (e.g., the Escape key doesn't work otherwise, as it's blocked by Radix)
       checkForDefaultPrevented: false,
-    }),
-    handleMetaEnter
+    }
   );
 
   const suffixRef = useRef<HTMLDivElement | null>(null);
@@ -851,10 +975,12 @@ export const CssValueInput = ({
       <Box {...getComboboxProps()}>
         <ComboboxAnchor asChild>
           <InputField
+            id={id}
             variant={variant}
             disabled={disabled}
             aria-disabled={ariaDisabled}
             fieldSizing={fieldSizing}
+            placeholder={placeholder}
             {...inputProps}
             {...autoScrollProps}
             value={getInputValue()}
@@ -863,14 +989,16 @@ export const CssValueInput = ({
                 // We are setting the value on focus because we might have removed the var() from the value,
                 // but once focused, we need to show the full value
                 event.target.value = itemToString(value);
-                event.target.select();
               }
             }}
             autoFocus={autoFocus}
             onBlur={handleOnBlur}
             onKeyDown={inputPropsHandleKeyDown}
-            containerRef={disabled ? undefined : scrubRef}
-            inputRef={mergeRefs(inputRef, props.inputRef ?? null)}
+            inputRef={mergeRefs(
+              inputRef,
+              props.inputRef,
+              disabled ? undefined : scrubRef
+            )}
             name={property}
             color={value.type === "invalid" ? "error" : undefined}
             prefix={finalPrefix}

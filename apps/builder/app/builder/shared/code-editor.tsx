@@ -12,7 +12,12 @@ import {
   highlightSpecialChars,
   highlightActiveLine,
 } from "@codemirror/view";
-import { bracketMatching, indentOnInput } from "@codemirror/language";
+import {
+  bracketMatching,
+  indentOnInput,
+  LanguageSupport,
+  LRLanguage,
+} from "@codemirror/language";
 import {
   autocompletion,
   closeBrackets,
@@ -27,14 +32,23 @@ import {
   EditorDialog,
   EditorDialogButton,
   EditorDialogControl,
+  foldGutterExtension,
   getMinMaxHeightVars,
 } from "./code-editor-base";
+import { cssCompletionSource, cssLanguage } from "@codemirror/lang-css";
 
 const wrapperStyle = css({
   position: "relative",
-  // 1 line is 16px
-  // set min 10 lines and max 20 lines
-  ...getMinMaxHeightVars({ minHeight: "160px", maxHeight: "320px" }),
+
+  variants: {
+    size: {
+      default: getMinMaxHeightVars({ minHeight: "160px", maxHeight: "320px" }),
+      keyframe: getMinMaxHeightVars({ minHeight: "60px", maxHeight: "120px" }),
+    },
+  },
+  defaultVariants: {
+    size: "default",
+  },
 });
 
 const getHtmlExtensions = () => [
@@ -79,22 +93,62 @@ const getMarkdownExtensions = () => [
   keymap.of(closeBracketsKeymap),
 ];
 
+const cssPropertiesLanguage = LRLanguage.define({
+  name: "css",
+  parser: cssLanguage.configure({ top: "Styles" }).parser,
+});
+const cssProperties = new LanguageSupport(
+  cssPropertiesLanguage,
+  cssPropertiesLanguage.data.of({
+    autocomplete: cssCompletionSource,
+  })
+);
+
+const getCssPropertiesExtensions = () => [
+  highlightActiveLine(),
+  highlightSpecialChars(),
+  indentOnInput(),
+  cssProperties,
+  // render autocomplete in body
+  // to prevent popover scroll overflow
+  tooltips({ parent: document.body }),
+  autocompletion({ icons: false }),
+];
+
 export const CodeEditor = forwardRef<
   HTMLDivElement,
   Omit<ComponentProps<typeof EditorContent>, "extensions"> & {
-    lang?: "html" | "markdown";
+    lang?: "html" | "markdown" | "css-properties";
     title?: ReactNode;
+    size?: "default" | "keyframe";
   }
->(({ lang, title, ...editorContentProps }, ref) => {
+>(({ lang, title, size, ...editorContentProps }, ref) => {
   const extensions = useMemo(() => {
     if (lang === "html") {
       return getHtmlExtensions();
     }
+
     if (lang === "markdown") {
       return getMarkdownExtensions();
     }
+
+    if (lang === "css-properties") {
+      return getCssPropertiesExtensions();
+    }
+
+    if (lang === undefined) {
+      return [];
+    }
+
+    lang satisfies never;
+
     return [];
   }, [lang]);
+
+  const dialogExtensions = useMemo(
+    () => [...extensions, foldGutterExtension],
+    [extensions]
+  );
 
   // prevent clicking on autocomplete options propagating to body
   // and closing dialogs and popovers
@@ -113,14 +167,19 @@ export const CodeEditor = forwardRef<
       document.removeEventListener("pointerdown", handlePointerDown, options);
     };
   }, []);
-  const content = (
-    <EditorContent {...editorContentProps} extensions={extensions} />
-  );
   return (
-    <div className={wrapperStyle()} ref={ref}>
+    <div className={wrapperStyle({ size })} ref={ref}>
       <EditorDialogControl>
-        {content}
-        <EditorDialog title={title} content={content}>
+        <EditorContent {...editorContentProps} extensions={extensions} />
+        <EditorDialog
+          title={title}
+          content={
+            <EditorContent
+              {...editorContentProps}
+              extensions={dialogExtensions}
+            />
+          }
+        >
           <EditorDialogButton />
         </EditorDialog>
       </EditorDialogControl>

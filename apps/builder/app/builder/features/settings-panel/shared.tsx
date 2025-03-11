@@ -11,13 +11,14 @@ import {
   type ComponentProps,
 } from "react";
 import equal from "fast-deep-equal";
-import type { PropMeta } from "@webstudio-is/react-sdk";
 import {
   decodeDataSourceVariable,
   encodeDataSourceVariable,
+  SYSTEM_VARIABLE_ID,
+  systemParameter,
 } from "@webstudio-is/sdk";
-import type { Prop, Asset } from "@webstudio-is/sdk";
-import { HelpIcon, SubtractIcon } from "@webstudio-is/icons";
+import type { PropMeta, Prop, Asset } from "@webstudio-is/sdk";
+import { InfoCircleIcon, MinusIcon } from "@webstudio-is/icons";
 import {
   SmallIconButton,
   Label as BaseLabel,
@@ -37,7 +38,7 @@ import {
 } from "~/shared/nano-states";
 import type { BindingVariant } from "~/builder/shared/binding-popover";
 import { humanizeString } from "~/shared/string-utils";
-import { $selectedInstanceKey } from "~/shared/awareness";
+import { $selectedInstanceKeyWithRoot } from "~/shared/awareness";
 
 export type PropValue =
   | { type: "number"; value: number }
@@ -48,7 +49,11 @@ export type PropValue =
   | { type: "expression"; value: string }
   | { type: "asset"; value: Asset["id"] }
   | { type: "page"; value: Extract<Prop, { type: "page" }>["value"] }
-  | { type: "action"; value: Extract<Prop, { type: "action" }>["value"] };
+  | { type: "action"; value: Extract<Prop, { type: "action" }>["value"] }
+  | {
+      type: "animationAction";
+      value: Extract<Prop, { type: "animationAction" }>["value"];
+    };
 
 // Weird code is to make type distributive
 // https://www.typescriptlang.org/docs/handbook/2/conditional-types.html#distributive-conditional-types
@@ -71,7 +76,7 @@ export type ControlProps<Control> = {
 };
 
 export const RemovePropButton = (props: { onClick: () => void }) => (
-  <SmallIconButton icon={<SubtractIcon />} variant="destructive" {...props} />
+  <SmallIconButton icon={<MinusIcon />} variant="destructive" {...props} />
 );
 
 const SimpleLabel = ({
@@ -145,7 +150,10 @@ export const Label = ({
           }
           variant="wrapped"
         >
-          <HelpIcon color={rawTheme.colors.foregroundSubtle} tabIndex={0} />
+          <InfoCircleIcon
+            color={rawTheme.colors.foregroundSubtle}
+            tabIndex={0}
+          />
         </Tooltip>
       )}
     </Flex>
@@ -312,7 +320,11 @@ export const Row = ({
 );
 
 export const $selectedInstanceScope = computed(
-  [$selectedInstanceKey, $variableValuesByInstanceSelector, $dataSources],
+  [
+    $selectedInstanceKeyWithRoot,
+    $variableValuesByInstanceSelector,
+    $dataSources,
+  ],
   (instanceKey, variableValuesByInstanceSelector, dataSources) => {
     const scope: Record<string, unknown> = {};
     const aliases = new Map<string, string>();
@@ -322,7 +334,10 @@ export const $selectedInstanceScope = computed(
     const values = variableValuesByInstanceSelector.get(instanceKey);
     if (values) {
       for (const [dataSourceId, value] of values) {
-        const dataSource = dataSources.get(dataSourceId);
+        let dataSource = dataSources.get(dataSourceId);
+        if (dataSourceId === SYSTEM_VARIABLE_ID) {
+          dataSource = systemParameter;
+        }
         if (dataSource === undefined) {
           continue;
         }
@@ -396,6 +411,9 @@ export const humanizeAttribute = (string: string) => {
   }
   if (string === "className") {
     return "Class";
+  }
+  if (string === "htmlFor") {
+    return "For";
   }
   return humanizeString(string);
 };

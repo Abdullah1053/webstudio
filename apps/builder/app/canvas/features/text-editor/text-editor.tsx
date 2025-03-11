@@ -89,10 +89,14 @@ import { setDataCollapsed } from "~/canvas/collapsed";
 import {
   $selectedPage,
   addTemporaryInstance,
+  getInstancePath,
   selectInstance,
 } from "~/shared/awareness";
 import { shallowEqual } from "shallow-equal";
-import { insertTemplateAt } from "~/builder/features/workspace/canvas-tools/outline/block-utils";
+import {
+  insertListItemAt,
+  insertTemplateAt,
+} from "~/builder/features/workspace/canvas-tools/outline/block-utils";
 
 const BindInstanceToNodePlugin = ({
   refs,
@@ -173,19 +177,57 @@ const CaretColorPlugin = () => {
   return null;
 };
 
+const isChrome = () =>
+  navigator.userAgentData?.brands.some(
+    (brand) => brand.brand === "Google Chrome"
+  );
+
 const OnChangeOnBlurPlugin = ({
   onChange,
 }: {
-  onChange: (editorState: EditorState) => void;
+  onChange: (editorState: EditorState, reason: "blur" | "unmount") => void;
 }) => {
   const [editor] = useLexicalComposerContext();
   const handleChange = useEffectEvent(onChange);
+
+  useEffect(
+    () => () => {
+      // Ensures editable content is saved if no blur event occurs before unmount.
+      // This can happen in Firefox and Safari.
+      // To reproduce: create a Content Block, edit a paragraph, then type `/` and select Heading or Paragraph from the menu.
+      // Without this, changes may be lost on unmount in FF and Safari.
+
+      if (isChrome()) {
+        // Fixes an issue in DEV MODE where, if text is center-aligned inside Flex/Grid,
+        // the code below causes Chrome to scroll the editable text block to the center of the view.
+        return;
+      }
+      // The issue is related to React’s development mode.
+      // When we set the initial selection in the Editor, we disable Lexical’s internal
+      // scrolling using the update operation tag tag: "skip-scroll-into-view".
+      // The problem is that a read operation forces all pending update operations to commit,
+      // and for some reason, this forced commit does not respect tags.
+      // In React’s development mode, useEffect runs twice, which causes scrollIntoView
+      // to be called during the first read.
+      // To prevent this, we disconnect the editor from the DOM
+      // by setting editor._rootElement = null;.
+      // This makes Lexical assume it’s in headless mode,
+      // preventing it from executing DOM operations.
+      editor._rootElement = null;
+
+      // Safari and FF support as no blur event is triggered in some cases
+      editor.read(() => {
+        handleChange(editor.getEditorState(), "unmount");
+      });
+    },
+    [editor, handleChange]
+  );
 
   useEffect(() => {
     const handleBlur = () => {
       // force read to get the latest state
       editor.read(() => {
-        handleChange(editor.getEditorState());
+        handleChange(editor.getEditorState(), "blur");
       });
     };
 
@@ -546,183 +588,200 @@ const InitCursorPlugin = () => {
       return;
     }
 
-    editor.update(() => {
-      const textEditingInstanceSelector = $textEditingInstanceSelector.get();
-      if (textEditingInstanceSelector === undefined) {
-        return;
-      }
+    editor.update(
+      () => {
+        const textEditingInstanceSelector = $textEditingInstanceSelector.get();
+        if (textEditingInstanceSelector === undefined) {
+          return;
+        }
 
-      const { reason } = textEditingInstanceSelector;
+        const { reason } = textEditingInstanceSelector;
 
-      if (reason === undefined) {
-        return;
-      }
+        if (reason === undefined) {
+          return;
+        }
 
-      if (reason === "click") {
-        const { mouseX, mouseY } = textEditingInstanceSelector;
+        if (reason === "click") {
+          const { mouseX, mouseY } = textEditingInstanceSelector;
 
-        const eventRange = caretFromPoint(mouseX, mouseY);
+          const eventRange = caretFromPoint(mouseX, mouseY);
 
-        if (eventRange !== null) {
-          const { offset: domOffset, node: domNode } = eventRange;
-          const node = $getNearestNodeFromDOMNode(domNode);
+          if (eventRange !== null) {
+            const { offset: domOffset, node: domNode } = eventRange;
+            const node = $getNearestNodeFromDOMNode(domNode);
 
-          if (node !== null) {
-            const selection = $createRangeSelection();
-            if ($isTextNode(node)) {
-              selection.anchor.set(node.getKey(), domOffset, "text");
-              selection.focus.set(node.getKey(), domOffset, "text");
+            if (node !== null) {
+              const selection = $createRangeSelection();
+              if ($isTextNode(node)) {
+                selection.anchor.set(node.getKey(), domOffset, "text");
+                selection.focus.set(node.getKey(), domOffset, "text");
+                const normalizedSelection =
+                  $normalizeSelection__EXPERIMENTAL(selection);
+
+                $setSelection(normalizedSelection);
+                return;
+              }
             }
-            const normalizedSelection =
-              $normalizeSelection__EXPERIMENTAL(selection);
 
-            $setSelection(normalizedSelection);
-            return;
+            if (domNode instanceof Element) {
+              const rect = domNode.getBoundingClientRect();
+              if (mouseX > rect.right) {
+                const selection = $getRoot().selectEnd();
+                $setSelection(selection);
+                return;
+              }
+            }
           }
         }
-      }
 
-      while (reason === "down" || reason === "up") {
-        const { cursorX } = textEditingInstanceSelector;
+        while (reason === "down" || reason === "up") {
+          const { cursorX } = textEditingInstanceSelector;
 
-        const [topRects, bottomRects] = getTopBottomRects(editor);
+          const [topRects, bottomRects] = getTopBottomRects(editor);
 
-        // Smoodge the cursor a little to the left and right to find the nearest text node
-        const smoodgeOffsets = [1, 2, 4];
-        const maxOffset = Math.max(...smoodgeOffsets);
+          // Smoodge the cursor a little to the left and right to find the nearest text node
+          const smoodgeOffsets = [1, 2, 4];
+          const maxOffset = Math.max(...smoodgeOffsets);
 
-        const rects = reason === "down" ? topRects : bottomRects;
+          const rects = reason === "down" ? topRects : bottomRects;
 
-        rects.sort((a, b) => a.left - b.left);
+          rects.sort((a, b) => a.left - b.left);
 
-        const rectWithText = rects.find(
-          (rect, index) =>
-            rect.left - (index === 0 ? maxOffset : 0) <= cursorX &&
-            cursorX <= rect.right + (index === rects.length - 1 ? maxOffset : 0)
-        );
+          const rectWithText = rects.find(
+            (rect, index) =>
+              rect.left - (index === 0 ? maxOffset : 0) <= cursorX &&
+              cursorX <=
+                rect.right + (index === rects.length - 1 ? maxOffset : 0)
+          );
 
-        if (rectWithText === undefined) {
+          if (rectWithText === undefined) {
+            break;
+          }
+
+          const newCursorY = rectWithText.top + rectWithText.height / 2;
+
+          const eventRanges = [caretFromPoint(cursorX, newCursorY)];
+          for (const offset of smoodgeOffsets) {
+            eventRanges.push(caretFromPoint(cursorX - offset, newCursorY));
+            eventRanges.push(caretFromPoint(cursorX + offset, newCursorY));
+          }
+
+          for (const eventRange of eventRanges) {
+            if (eventRange === null) {
+              continue;
+            }
+
+            const { offset: domOffset, node: domNode } = eventRange;
+            const node = $getNearestNodeFromDOMNode(domNode);
+
+            if (node !== null && $isTextNode(node)) {
+              const selection = $createRangeSelection();
+              selection.anchor.set(node.getKey(), domOffset, "text");
+              selection.focus.set(node.getKey(), domOffset, "text");
+              const normalizedSelection =
+                $normalizeSelection__EXPERIMENTAL(selection);
+              $setSelection(normalizedSelection);
+
+              return;
+            }
+          }
+
           break;
         }
 
-        const newCursorY = rectWithText.top + rectWithText.height / 2;
+        if (
+          reason === "down" ||
+          reason === "right" ||
+          reason === "enter" ||
+          reason === "click"
+        ) {
+          const firstNode = $getRoot().getFirstDescendant();
 
-        const eventRanges = [caretFromPoint(cursorX, newCursorY)];
-        for (const offset of smoodgeOffsets) {
-          eventRanges.push(caretFromPoint(cursorX - offset, newCursorY));
-          eventRanges.push(caretFromPoint(cursorX + offset, newCursorY));
-        }
-
-        for (const eventRange of eventRanges) {
-          if (eventRange === null) {
-            continue;
-          }
-
-          const { offset: domOffset, node: domNode } = eventRange;
-          const node = $getNearestNodeFromDOMNode(domNode);
-
-          if (node !== null && $isTextNode(node)) {
-            const selection = $createRangeSelection();
-            selection.anchor.set(node.getKey(), domOffset, "text");
-            selection.focus.set(node.getKey(), domOffset, "text");
-            const normalizedSelection =
-              $normalizeSelection__EXPERIMENTAL(selection);
-            $setSelection(normalizedSelection);
-
+          if (firstNode === null) {
             return;
           }
-        }
 
-        break;
-      }
-
-      if (
-        reason === "down" ||
-        reason === "right" ||
-        reason === "enter" ||
-        reason === "click"
-      ) {
-        const firstNode = $getRoot().getFirstDescendant();
-
-        if (firstNode === null) {
-          return;
-        }
-
-        if ($isTextNode(firstNode)) {
-          const selection = $createRangeSelection();
-          selection.anchor.set(firstNode.getKey(), 0, "text");
-          selection.focus.set(firstNode.getKey(), 0, "text");
-          $setSelection(selection);
-        }
-
-        if ($isElementNode(firstNode)) {
-          // e.g. Box is empty
-          const selection = $createRangeSelection();
-          selection.anchor.set(firstNode.getKey(), 0, "element");
-          selection.focus.set(firstNode.getKey(), 0, "element");
-          $setSelection(selection);
-        }
-
-        if ($isLineBreakNode(firstNode)) {
-          // e.g. Box contains 2+ empty lines
-          const selection = $createRangeSelection();
-          $setSelection(selection);
-        }
-
-        return;
-      }
-
-      if (reason === "up" || reason === "left") {
-        const selection = $createRangeSelection();
-        const lastNode = $getRoot().getLastDescendant();
-
-        if (lastNode === null) {
-          return;
-        }
-
-        if ($isTextNode(lastNode)) {
-          const contentSize = lastNode.getTextContentSize();
-          selection.anchor.set(lastNode.getKey(), contentSize, "text");
-          selection.focus.set(lastNode.getKey(), contentSize, "text");
-          $setSelection(selection);
-        }
-
-        if ($isElementNode(lastNode)) {
-          // e.g. Box is empty
-          const selection = $createRangeSelection();
-          selection.anchor.set(lastNode.getKey(), 0, "element");
-          selection.focus.set(lastNode.getKey(), 0, "element");
-          $setSelection(selection);
-        }
-
-        if ($isLineBreakNode(lastNode)) {
-          // e.g. Box contains 2+ empty lines
-          const parent = lastNode.getParent();
-          if ($isElementNode(parent)) {
+          if ($isTextNode(firstNode)) {
             const selection = $createRangeSelection();
-            selection.anchor.set(
-              parent.getKey(),
-              parent.getChildrenSize(),
-              "element"
-            );
-            selection.focus.set(
-              parent.getKey(),
-              parent.getChildrenSize(),
-              "element"
-            );
+            selection.anchor.set(firstNode.getKey(), 0, "text");
+            selection.focus.set(firstNode.getKey(), 0, "text");
             $setSelection(selection);
           }
+
+          if ($isElementNode(firstNode)) {
+            // e.g. Box is empty
+            const selection = $createRangeSelection();
+            selection.anchor.set(firstNode.getKey(), 0, "element");
+            selection.focus.set(firstNode.getKey(), 0, "element");
+            $setSelection(selection);
+          }
+
+          if ($isLineBreakNode(firstNode)) {
+            // e.g. Box contains 2+ empty lines
+            const selection = $createRangeSelection();
+            $setSelection(selection);
+          }
+
+          return;
         }
 
-        return;
-      }
-      if (reason === "new") {
-        $selectAll();
-        return;
-      }
+        if (reason === "up" || reason === "left") {
+          const selection = $createRangeSelection();
+          const lastNode = $getRoot().getLastDescendant();
 
-      reason satisfies never;
-    });
+          if (lastNode === null) {
+            return;
+          }
+
+          if ($isTextNode(lastNode)) {
+            const contentSize = lastNode.getTextContentSize();
+            selection.anchor.set(lastNode.getKey(), contentSize, "text");
+            selection.focus.set(lastNode.getKey(), contentSize, "text");
+            $setSelection(selection);
+          }
+
+          if ($isElementNode(lastNode)) {
+            // e.g. Box is empty
+            const selection = $createRangeSelection();
+            selection.anchor.set(lastNode.getKey(), 0, "element");
+            selection.focus.set(lastNode.getKey(), 0, "element");
+            $setSelection(selection);
+          }
+
+          if ($isLineBreakNode(lastNode)) {
+            // e.g. Box contains 2+ empty lines
+            const parent = lastNode.getParent();
+            if ($isElementNode(parent)) {
+              const selection = $createRangeSelection();
+              selection.anchor.set(
+                parent.getKey(),
+                parent.getChildrenSize(),
+                "element"
+              );
+              selection.focus.set(
+                parent.getKey(),
+                parent.getChildrenSize(),
+                "element"
+              );
+              $setSelection(selection);
+            }
+          }
+
+          return;
+        }
+        if (reason === "new") {
+          $selectAll();
+          return;
+        }
+
+        reason satisfies never;
+      },
+      {
+        // We are controlling scroll ourself in instance-selected.ts see updateScroll.
+        // Without skipping we are getting side effects of composition in scrollBy, scrollIntoView calls
+        tag: "skip-scroll-into-view",
+      }
+    );
   }, [editor]);
 
   return null;
@@ -1015,15 +1074,17 @@ const RichTextContentPluginInternal = ({
       if (!isSelectionInSameComponent) {
         node?.remove();
 
-        const rootNodeContent = $getRoot().getTextContent().trim();
         // Delete current
-        if (rootNodeContent.length === 0) {
+        if ($getRoot().getTextContentSize() === 0) {
           const blockChildSelector =
             findBlockChildSelector(rootInstanceSelector);
 
           if (blockChildSelector) {
             updateWebstudioData((data) => {
-              deleteInstanceMutable(data, rootInstanceSelector);
+              deleteInstanceMutable(
+                data,
+                getInstancePath(rootInstanceSelector, data.instances)
+              );
             });
           }
         }
@@ -1074,9 +1135,35 @@ const RichTextContentPluginInternal = ({
         }
 
         if (event.key === "Backspace" || event.key === "Delete") {
-          const rootNodeContent = $getRoot().getTextContent().trim();
-          // Delete current
-          if (rootNodeContent.length === 0) {
+          if ($getRoot().getTextContentSize() === 0) {
+            const currentInstance = $instances
+              .get()
+              .get(rootInstanceSelector[0]);
+
+            if (currentInstance?.component === "ListItem") {
+              onNext(editor.getEditorState(), { reason: "left" });
+
+              const parentInstanceSelector = rootInstanceSelector.slice(1);
+              const parentInstance = $instances
+                .get()
+                .get(parentInstanceSelector[0]);
+
+              const isLastChild = parentInstance?.children.length === 1;
+
+              updateWebstudioData((data) => {
+                deleteInstanceMutable(
+                  data,
+                  getInstancePath(
+                    isLastChild ? parentInstanceSelector : rootInstanceSelector,
+                    data.instances
+                  )
+                );
+              });
+
+              event.preventDefault();
+              return true;
+            }
+
             const blockChildSelector =
               findBlockChildSelector(rootInstanceSelector);
 
@@ -1084,7 +1171,10 @@ const RichTextContentPluginInternal = ({
               onNext(editor.getEditorState(), { reason: "left" });
 
               updateWebstudioData((data) => {
-                deleteInstanceMutable(data, rootInstanceSelector);
+                deleteInstanceMutable(
+                  data,
+                  getInstancePath(blockChildSelector, data.instances)
+                );
               });
 
               event.preventDefault();
@@ -1095,6 +1185,21 @@ const RichTextContentPluginInternal = ({
 
         if (menuState === "closed") {
           if (event.key === "Enter" && !event.shiftKey) {
+            // Custom logic if we are editing ListItem
+            const currentInstance = $instances
+              .get()
+              .get(rootInstanceSelector[0]);
+
+            if (
+              currentInstance?.component === "ListItem" &&
+              $getRoot().getTextContentSize() > 0
+            ) {
+              // Instead of creating block component we need to add a new ListItem
+              insertListItemAt(rootInstanceSelector);
+              event.preventDefault();
+              return true;
+            }
+
             // Check if it pressed on the last line, last symbol
 
             const allowedComponents = ["Paragraph", "Text", "Heading"];
@@ -1143,6 +1248,31 @@ const RichTextContentPluginInternal = ({
               */
 
               insertTemplateAt(templateSelector, rootInstanceSelector, false);
+
+              if (
+                currentInstance?.component === "ListItem" &&
+                $getRoot().getTextContentSize() === 0
+              ) {
+                const parentInstanceSelector = rootInstanceSelector.slice(1);
+                const parentInstance = $instances
+                  .get()
+                  .get(parentInstanceSelector[0]);
+
+                const isLastChild = parentInstance?.children.length === 1;
+
+                // Pressing Enter within an empty list item deletes the empty item
+                updateWebstudioData((data) => {
+                  deleteInstanceMutable(
+                    data,
+                    getInstancePath(
+                      isLastChild
+                        ? parentInstanceSelector
+                        : rootInstanceSelector,
+                      data.instances
+                    )
+                  );
+                });
+              }
 
               event.preventDefault();
               return true;
@@ -1216,6 +1346,10 @@ const RichTextContentPluginInternal = ({
     );
 
     const closeMenuWithUpdate = () => {
+      if (menuState === "closed") {
+        return;
+      }
+
       editor.update(() => {
         closeMenu();
       });
@@ -1284,6 +1418,8 @@ const RichTextContentPluginInternal = ({
       unsubscribeUpdateListener();
       unsubscibeSelectionChange();
       unsubscribeBlurListener();
+      // Safari and FF support as no blur event is triggered in some cases
+      closeMenuWithUpdate();
     };
   }, [
     editor,
@@ -1396,35 +1532,39 @@ export const TextEditor = ({
   const lastSavedStateJsonRef = useRef<SerializedEditorState | null>(null);
   const [newLinkKeyToInstanceId] = useState(() => new Map());
 
-  const handleChange = useEffectEvent((editorState: EditorState) => {
-    editorState.read(() => {
-      const treeRootInstance = instances.get(rootInstanceSelector[0]);
-      if (treeRootInstance) {
-        const jsonState = editorState.toJSON();
-        if (deepEqual(jsonState, lastSavedStateJsonRef.current)) {
-          setDataCollapsed(rootInstanceSelector[0], false);
-          return;
+  const handleChange = useEffectEvent(
+    (editorState: EditorState, reason: "blur" | "unmount" | "next") => {
+      editorState.read(() => {
+        const treeRootInstance = instances.get(rootInstanceSelector[0]);
+        if (treeRootInstance) {
+          const jsonState = editorState.toJSON();
+          if (deepEqual(jsonState, lastSavedStateJsonRef.current)) {
+            setDataCollapsed(rootInstanceSelector[0], false);
+            return;
+          }
+
+          onChange(
+            $convertToUpdates(treeRootInstance, refs, newLinkKeyToInstanceId)
+          );
+          newLinkKeyToInstanceId.clear();
+          lastSavedStateJsonRef.current = jsonState;
         }
 
-        onChange(
-          $convertToUpdates(treeRootInstance, refs, newLinkKeyToInstanceId)
-        );
-        newLinkKeyToInstanceId.clear();
-        lastSavedStateJsonRef.current = jsonState;
+        setDataCollapsed(rootInstanceSelector[0], false);
+      });
+
+      const textEditingSelector = $textEditingInstanceSelector.get()?.selector;
+      if (textEditingSelector === undefined) {
+        return;
       }
 
-      setDataCollapsed(rootInstanceSelector[0], false);
-    });
-
-    const textEditingSelector = $textEditingInstanceSelector.get()?.selector;
-    if (textEditingSelector === undefined) {
-      return;
+      if (reason === "blur") {
+        if (shallowEqual(textEditingSelector, rootInstanceSelector)) {
+          $textEditingInstanceSelector.set(undefined);
+        }
+      }
     }
-
-    if (shallowEqual(textEditingSelector, rootInstanceSelector)) {
-      $textEditingInstanceSelector.set(undefined);
-    }
-  });
+  );
 
   useLayoutEffect(() => {
     const sheet = createRegularStyleSheet({ name: "text-editor" });
@@ -1476,6 +1616,7 @@ export const TextEditor = ({
   const handleNext = useEffectEvent(
     (state: EditorState, args: HandleNextParams) => {
       const rootInstanceId = $selectedPage.get()?.rootInstanceId;
+      const metas = $registeredComponentMetas.get();
 
       if (rootInstanceId === undefined) {
         return;
@@ -1485,7 +1626,7 @@ export const TextEditor = ({
       findAllEditableInstanceSelector(
         [rootInstanceId],
         instances,
-        $registeredComponentMetas.get(),
+        metas,
         editableInstanceSelectors
       );
 
@@ -1531,9 +1672,19 @@ export const TextEditor = ({
 
         const instance = instances.get(nextSelector[0]);
 
+        if (instance === undefined) {
+          continue;
+        }
+        const meta = metas.get(instance.component);
+
         // opinionated: Non-collapsed elements without children can act as spacers (they have size for some reason).
-        if (instance?.children.length === 0) {
+        if (
+          // Components with pseudo-elements (e.g., ::marker) that prevent content from collapsing
+          meta?.placeholder === undefined &&
+          instance?.children.length === 0
+        ) {
           const elt = getElementByInstanceSelector(nextSelector);
+
           if (elt === undefined) {
             continue;
           }
@@ -1543,7 +1694,7 @@ export const TextEditor = ({
           }
         }
 
-        handleChange(state);
+        handleChange(state, "next");
 
         $textEditingInstanceSelector.set({
           selector: nextSelector,
@@ -1607,7 +1758,6 @@ export const TextEditor = ({
       <RichTextPlugin
         ErrorBoundary={LexicalErrorBoundary}
         contentEditable={contentEditable}
-        placeholder={<></>}
       />
       <LinkPlugin />
 

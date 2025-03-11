@@ -17,6 +17,8 @@ import {
   generateObjectExpression,
   isLiteralExpression,
   parseObjectExpression,
+  SYSTEM_VARIABLE_ID,
+  systemParameter,
 } from "@webstudio-is/sdk";
 import { sitemapResourceUrl } from "@webstudio-is/sdk/runtime";
 import {
@@ -33,10 +35,8 @@ import {
   Tooltip,
   theme,
 } from "@webstudio-is/design-system";
-import { DeleteIcon, InfoCircleIcon, PlusIcon } from "@webstudio-is/icons";
-import { isFeatureEnabled } from "@webstudio-is/feature-flags";
+import { TrashIcon, InfoCircleIcon, PlusIcon } from "@webstudio-is/icons";
 import { humanizeString } from "~/shared/string-utils";
-import { serverSyncStore } from "~/shared/sync";
 import {
   $dataSources,
   $resources,
@@ -56,9 +56,11 @@ import {
 import { parseCurl, type CurlRequest } from "./curl";
 import {
   $selectedInstance,
-  $selectedInstanceKey,
+  $selectedInstanceKeyWithRoot,
   $selectedPage,
 } from "~/shared/awareness";
+import { updateWebstudioData } from "~/shared/instance-utils";
+import { rebindTreeVariablesMutable } from "~/shared/data-variables";
 
 const validateUrl = (value: string, scope: Record<string, unknown>) => {
   const evaluatedValue = evaluateExpressionWithinScope(value, scope);
@@ -290,7 +292,7 @@ const HeaderPair = ({
         </svg>
         <SmallIconButton
           variant="destructive"
-          icon={<DeleteIcon />}
+          icon={<TrashIcon />}
           onClick={onDelete}
         />
         <svg
@@ -374,7 +376,7 @@ const $hiddenDataSourceIds = computed(
         dataSourceIds.add(dataSource.id);
       }
     }
-    if (page && isFeatureEnabled("filters")) {
+    if (page?.systemDataSourceId) {
       dataSourceIds.delete(page.systemDataSourceId);
     }
     return dataSourceIds;
@@ -383,7 +385,7 @@ const $hiddenDataSourceIds = computed(
 
 const $selectedInstanceScope = computed(
   [
-    $selectedInstanceKey,
+    $selectedInstanceKeyWithRoot,
     $variableValuesByInstanceSelector,
     $dataSources,
     $hiddenDataSourceIds,
@@ -405,7 +407,10 @@ const $selectedInstanceScope = computed(
         if (hiddenDataSourceIds.has(dataSourceId)) {
           continue;
         }
-        const dataSource = dataSources.get(dataSourceId);
+        let dataSource = dataSources.get(dataSourceId);
+        if (dataSourceId === SYSTEM_VARIABLE_ID) {
+          dataSource = systemParameter;
+        }
         if (dataSource === undefined) {
           continue;
         }
@@ -582,8 +587,8 @@ export const ResourceForm = forwardRef<
 
   useImperativeHandle(ref, () => ({
     save: (formData) => {
-      const instanceId = $selectedInstance.get()?.id;
-      if (instanceId === undefined) {
+      const selectedInstance = $selectedInstance.get();
+      if (selectedInstance === undefined) {
         return;
       }
       const name = z.string().parse(formData.get("name"));
@@ -598,18 +603,17 @@ export const ResourceForm = forwardRef<
       const newVariable: DataSource = {
         id: variable?.id ?? nanoid(),
         // preserve existing instance scope when edit
-        scopeInstanceId: variable?.scopeInstanceId ?? instanceId,
+        scopeInstanceId: variable?.scopeInstanceId ?? selectedInstance.id,
         name,
         type: "resource",
         resourceId: newResource.id,
       };
-      serverSyncStore.createTransaction(
-        [$dataSources, $resources],
-        (dataSources, resources) => {
-          dataSources.set(newVariable.id, newVariable);
-          resources.set(newResource.id, newResource);
-        }
-      );
+      updateWebstudioData((data) => {
+        data.dataSources.set(newVariable.id, newVariable);
+        data.resources.set(newResource.id, newResource);
+        const startingInstanceId = selectedInstance.id;
+        rebindTreeVariablesMutable({ startingInstanceId, ...data });
+      });
     },
   }));
 
@@ -715,8 +719,8 @@ export const SystemResourceForm = forwardRef<
 
   useImperativeHandle(ref, () => ({
     save: (formData) => {
-      const instanceId = $selectedInstance.get()?.id;
-      if (instanceId === undefined) {
+      const selectedInstance = $selectedInstance.get();
+      if (selectedInstance === undefined) {
         return;
       }
       const name = z.string().parse(formData.get("name"));
@@ -731,18 +735,17 @@ export const SystemResourceForm = forwardRef<
       const newVariable: DataSource = {
         id: variable?.id ?? nanoid(),
         // preserve existing instance scope when edit
-        scopeInstanceId: variable?.scopeInstanceId ?? instanceId,
+        scopeInstanceId: variable?.scopeInstanceId ?? selectedInstance.id,
         name,
         type: "resource",
         resourceId: newResource.id,
       };
-      serverSyncStore.createTransaction(
-        [$dataSources, $resources],
-        (dataSources, resources) => {
-          dataSources.set(newVariable.id, newVariable);
-          resources.set(newResource.id, newResource);
-        }
-      );
+      updateWebstudioData((data) => {
+        data.dataSources.set(newVariable.id, newVariable);
+        data.resources.set(newResource.id, newResource);
+        const startingInstanceId = selectedInstance.id;
+        rebindTreeVariablesMutable({ startingInstanceId, ...data });
+      });
     },
   }));
 
@@ -825,8 +828,8 @@ export const GraphqlResourceForm = forwardRef<
 
   useImperativeHandle(ref, () => ({
     save: (formData) => {
-      const instanceId = $selectedInstance.get()?.id;
-      if (instanceId === undefined) {
+      const selectedInstance = $selectedInstance.get();
+      if (selectedInstance === undefined) {
         return;
       }
       const name = z.string().parse(formData.get("name"));
@@ -848,18 +851,17 @@ export const GraphqlResourceForm = forwardRef<
       const newVariable: DataSource = {
         id: variable?.id ?? nanoid(),
         // preserve existing instance scope when edit
-        scopeInstanceId: variable?.scopeInstanceId ?? instanceId,
+        scopeInstanceId: variable?.scopeInstanceId ?? selectedInstance.id,
         name,
         type: "resource",
         resourceId: newResource.id,
       };
-      serverSyncStore.createTransaction(
-        [$dataSources, $resources],
-        (dataSources, resources) => {
-          dataSources.set(newVariable.id, newVariable);
-          resources.set(newResource.id, newResource);
-        }
-      );
+      updateWebstudioData((data) => {
+        data.dataSources.set(newVariable.id, newVariable);
+        data.resources.set(newResource.id, newResource);
+        const startingInstanceId = selectedInstance.id;
+        rebindTreeVariablesMutable({ startingInstanceId, ...data });
+      });
     },
   }));
 

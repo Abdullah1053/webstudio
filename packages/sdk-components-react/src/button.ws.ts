@@ -4,7 +4,7 @@ import {
   type PresetStyle,
   type WsComponentMeta,
   type WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
+} from "@webstudio-is/sdk";
 import { button } from "@webstudio-is/sdk/normalize.css";
 import { props } from "./__generated__/button.props";
 import type { defaultTag } from "./button";
@@ -14,34 +14,17 @@ const presetStyle = {
 } satisfies PresetStyle<typeof defaultTag>;
 
 export const meta: WsComponentMeta = {
-  category: "forms",
+  icon: ButtonElementIcon,
   type: "container",
   constraints: {
     relation: "ancestor",
     component: { $nin: ["Button", "Link"] },
   },
-  description:
-    "Use a button to submit forms or trigger actions within a page. Do not use a button to navigate users to another resource or another page - that’s what a link is used for.",
-  icon: ButtonElementIcon,
   presetStyle,
   states: [
     ...defaultStates,
     { selector: ":disabled", label: "Disabled" },
     { selector: ":enabled", label: "Enabled" },
-  ],
-  order: 2,
-  template: [
-    {
-      type: "instance",
-      component: "Button",
-      children: [
-        {
-          type: "text",
-          value: "Button text you can edit",
-          placeholder: true,
-        },
-      ],
-    },
   ],
 };
 

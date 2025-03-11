@@ -9,12 +9,16 @@ import { createRegularStyleSheet } from "@webstudio-is/css-engine";
 import {
   generateJsxElement,
   generateJsxChildren,
-  getIndexesWithinAncestors,
   idAttribute,
   componentAttribute,
-  type WsEmbedTemplate,
 } from "@webstudio-is/react-sdk";
-import { Instance, createScope, findTreeInstanceIds } from "@webstudio-is/sdk";
+import {
+  type WsEmbedTemplate,
+  Instance,
+  createScope,
+  findTreeInstanceIds,
+  getIndexesWithinAncestors,
+} from "@webstudio-is/sdk";
 import { computed } from "nanostores";
 import {
   $dataSources,

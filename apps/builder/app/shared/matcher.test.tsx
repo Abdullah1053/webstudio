@@ -1,20 +1,21 @@
 import { describe, expect, test, vi } from "vitest";
 import {
-  renderJsx,
   $,
-  ExpressionValue,
+  expression,
   renderTemplate,
+  renderData,
 } from "@webstudio-is/template";
-import { coreMetas } from "@webstudio-is/react-sdk";
+import { coreMetas } from "@webstudio-is/sdk";
 import * as baseMetas from "@webstudio-is/sdk-components-react/metas";
-import type { WsComponentMeta } from "@webstudio-is/react-sdk";
-import type { Matcher } from "@webstudio-is/sdk";
+import * as radixMetas from "@webstudio-is/sdk-components-react-radix/metas";
+import type { Matcher, WsComponentMeta } from "@webstudio-is/sdk";
 import {
   findClosestNonTextualContainer,
   findClosestInstanceMatchingFragment,
   isInstanceMatching,
   isTreeMatching,
   findClosestContainer,
+  isInstanceDetachable,
 } from "./matcher";
 
 const metas = new Map(Object.entries({ ...coreMetas, ...baseMetas }));
@@ -30,7 +31,7 @@ describe("is instance matching", () => {
   test("matches self with self matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -46,7 +47,7 @@ describe("is instance matching", () => {
     ).toBeTruthy();
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -65,7 +66,7 @@ describe("is instance matching", () => {
   test("matches self with negated self matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -81,7 +82,7 @@ describe("is instance matching", () => {
     ).toBeTruthy();
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -100,7 +101,7 @@ describe("is instance matching", () => {
   test("matches parent with parent matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -119,7 +120,7 @@ describe("is instance matching", () => {
   test("not matches ancestor with parent matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.Box ws:id="box">
@@ -140,7 +141,7 @@ describe("is instance matching", () => {
   test("not matches another parent with parent matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.ListItem ws:id="listitem"></$.ListItem>
           </$.Body>
@@ -157,7 +158,7 @@ describe("is instance matching", () => {
   test("matches parent with negated parent matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.ListItem ws:id="listitem"></$.ListItem>
           </$.Body>
@@ -174,7 +175,7 @@ describe("is instance matching", () => {
   test("not matches parent with negated parent matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -193,7 +194,7 @@ describe("is instance matching", () => {
   test("matches parent with ancestor matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -212,7 +213,7 @@ describe("is instance matching", () => {
   test("matches parent with ancestor matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.Box ws:id="box">
@@ -233,7 +234,7 @@ describe("is instance matching", () => {
   test("not matches another ancestor with ancestor matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -252,7 +253,7 @@ describe("is instance matching", () => {
   test("matches ancestor with negated ancestor matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -271,7 +272,7 @@ describe("is instance matching", () => {
   test("not matches ancestor with negated ancestor matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -290,7 +291,7 @@ describe("is instance matching", () => {
   test("combines self, parent and ancestor matchers", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -316,7 +317,7 @@ describe("is instance matching", () => {
     ).toBeTruthy();
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -345,7 +346,7 @@ describe("is instance matching", () => {
   test("negated ancestor matcher should not interfere with self relation", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list"></$.List>
           </$.Body>
@@ -372,7 +373,7 @@ describe("is instance matching", () => {
     ];
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.List ws:id="list"></$.List>
@@ -385,7 +386,7 @@ describe("is instance matching", () => {
     ).toBeTruthy();
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list"></$.List>
           </$.Body>
@@ -399,7 +400,7 @@ describe("is instance matching", () => {
   test("matches a child with child matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -418,7 +419,7 @@ describe("is instance matching", () => {
   test("matches a child with negated child matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list"></$.List>
           </$.Body>
@@ -432,7 +433,7 @@ describe("is instance matching", () => {
     ).toBeTruthy();
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.Box ws:id="box"></$.Box>
@@ -448,7 +449,7 @@ describe("is instance matching", () => {
     ).toBeTruthy();
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -467,7 +468,7 @@ describe("is instance matching", () => {
   test("not matches a parent without a child with child matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list"></$.List>
           </$.Body>
@@ -484,7 +485,7 @@ describe("is instance matching", () => {
   test("not matches a parent with different child with child matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.Box ws:id="box"></$.Box>
@@ -503,7 +504,7 @@ describe("is instance matching", () => {
   test("matches a child with descendant matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -522,7 +523,7 @@ describe("is instance matching", () => {
   test("matches a descendant with descendant matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.Box ws:id="box">
@@ -543,7 +544,7 @@ describe("is instance matching", () => {
   test("matches a descendant with negated descendant matcher", () => {
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.Box ws:id="box"></$.Box>
@@ -559,7 +560,7 @@ describe("is instance matching", () => {
     ).toBeTruthy();
     expect(
       isInstanceMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.Box ws:id="box">
@@ -580,7 +581,7 @@ describe("is instance matching", () => {
   test("provide error message when negated matcher is failed", () => {
     const onError = vi.fn();
     isInstanceMatching({
-      ...renderJsx(
+      ...renderData(
         <$.Body ws:id="body">
           <$.Box ws:id="box"></$.Box>
         </$.Body>
@@ -594,7 +595,7 @@ describe("is instance matching", () => {
     });
     expect(onError).toHaveBeenLastCalledWith("Box or Text is not acceptable");
     isInstanceMatching({
-      ...renderJsx(
+      ...renderData(
         <$.Body ws:id="body">
           <$.Box ws:id="box">
             <$.ListItem ws:id="listitem"></$.ListItem>
@@ -614,7 +615,7 @@ describe("is instance matching", () => {
   test("provide error message when positive matcher is failed", () => {
     const onError = vi.fn();
     isInstanceMatching({
-      ...renderJsx(
+      ...renderData(
         <$.Body ws:id="body">
           <$.ListItem ws:id="listitem"></$.ListItem>
         </$.Body>
@@ -628,7 +629,7 @@ describe("is instance matching", () => {
     });
     expect(onError).toHaveBeenLastCalledWith("Box or Text is missing");
     isInstanceMatching({
-      ...renderJsx(
+      ...renderData(
         <$.Body ws:id="body">
           <$.ListItem ws:id="listitem"></$.ListItem>
         </$.Body>
@@ -673,7 +674,7 @@ describe("is tree matching", () => {
   test("match selected instance", () => {
     expect(
       isTreeMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -686,7 +687,7 @@ describe("is tree matching", () => {
     ).toBeTruthy();
     expect(
       isTreeMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.ListItem ws:id="listitem"></$.ListItem>
           </$.Body>
@@ -700,7 +701,7 @@ describe("is tree matching", () => {
   test("match all descendants", () => {
     expect(
       isTreeMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.List ws:id="list">
               <$.ListItem ws:id="listitem"></$.ListItem>
@@ -713,7 +714,7 @@ describe("is tree matching", () => {
     ).toBeTruthy();
     expect(
       isTreeMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.ListItem ws:id="listitem"></$.ListItem>
             <$.Box ws:id="box"></$.Box>
@@ -728,7 +729,7 @@ describe("is tree matching", () => {
   test("match ancestors", () => {
     expect(
       isTreeMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Tabs ws:id="tabs">
               <$.Box ws:id="box">
@@ -743,7 +744,7 @@ describe("is tree matching", () => {
     ).toBeTruthy();
     expect(
       isTreeMatching({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Tabs ws:id="tabs">
               <$.Box ws:id="box"></$.Box>
@@ -757,9 +758,68 @@ describe("is tree matching", () => {
   });
 });
 
+describe("is instance detachable", () => {
+  const metas = new Map(Object.entries({ ...baseMetas, ...radixMetas }));
+
+  test("allow deleting one of matching instances", () => {
+    expect(
+      isInstanceDetachable({
+        ...renderData(
+          <$.Body ws:id="body">
+            <$.Tabs ws:id="tabs">
+              <$.TabsList ws:id="list">
+                <$.TabsTrigger ws:id="trigger1"></$.TabsTrigger>
+                <$.TabsTrigger ws:id="trigger2"></$.TabsTrigger>
+              </$.TabsList>
+              <$.TabsContent ws:id="content1"></$.TabsContent>
+              <$.TabsContent ws:id="content2"></$.TabsContent>
+            </$.Tabs>
+          </$.Body>
+        ),
+        metas,
+        instanceSelector: ["trigger1", "list", "tabs", "body"],
+      })
+    ).toBeTruthy();
+  });
+
+  test("prevent deleting last matching instance", () => {
+    expect(
+      isInstanceDetachable({
+        ...renderData(
+          <$.Body ws:id="body">
+            <$.Tabs ws:id="tabs">
+              <$.TabsList ws:id="list">
+                <$.TabsTrigger ws:id="trigger1"></$.TabsTrigger>
+              </$.TabsList>
+              <$.TabsContent ws:id="content1"></$.TabsContent>
+            </$.Tabs>
+          </$.Body>
+        ),
+        metas,
+        instanceSelector: ["trigger1", "list", "tabs", "body"],
+      })
+    ).toBeFalsy();
+  });
+
+  test("allow deleting when siblings not matching", () => {
+    expect(
+      isInstanceDetachable({
+        ...renderData(
+          <$.Body ws:id="body">
+            <$.Tabs ws:id="tabs"></$.Tabs>
+            <$.Box ws:id="box"></$.Box>
+          </$.Body>
+        ),
+        metas,
+        instanceSelector: ["box", "body"],
+      })
+    ).toBeTruthy();
+  });
+});
+
 describe("find closest instance matching fragment", () => {
   test("finds closest list with list item fragment", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="body">
         <$.List ws:id="list">
           <$.ListItem ws:id="listitem"></$.ListItem>
@@ -795,7 +855,7 @@ describe("find closest instance matching fragment", () => {
   });
 
   test("finds button parent with button fragment", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="body">
         <$.Button ws:id="button"></$.Button>
       </$.Body>
@@ -812,7 +872,7 @@ describe("find closest instance matching fragment", () => {
   });
 
   test("finds button parent with button+span fragment", () => {
-    const { instances } = renderJsx(
+    const { instances } = renderData(
       <$.Body ws:id="body">
         <$.Button ws:id="button"></$.Button>
       </$.Body>
@@ -835,7 +895,7 @@ describe("find closest instance matching fragment", () => {
 
   test("report first error", () => {
     const onError = vi.fn();
-    const { instances } = renderJsx(<$.Body ws:id="body"></$.Body>);
+    const { instances } = renderData(<$.Body ws:id="body"></$.Body>);
     const fragment = renderTemplate(<$.ListItem ws:id="listitem"></$.ListItem>);
     findClosestInstanceMatchingFragment({
       metas,
@@ -852,7 +912,7 @@ describe("find closest container", () => {
   test("skips non-container instances", () => {
     expect(
       findClosestContainer({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.Image ws:id="image" />
@@ -868,7 +928,7 @@ describe("find closest container", () => {
   test("allow containers with text", () => {
     expect(
       findClosestContainer({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.Box ws:id="box-with-text">text</$.Box>
@@ -884,12 +944,10 @@ describe("find closest container", () => {
   test("allow containers with expression", () => {
     expect(
       findClosestContainer({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
-              <$.Box ws:id="box-with-expr">
-                {new ExpressionValue("1 + 1")}
-              </$.Box>
+              <$.Box ws:id="box-with-expr">{expression`1 + 1`}</$.Box>
             </$.Box>
           </$.Body>
         ),
@@ -902,7 +960,7 @@ describe("find closest container", () => {
   test("allow root with text", () => {
     expect(
       findClosestContainer({
-        ...renderJsx(<$.Body ws:id="body">text</$.Body>),
+        ...renderData(<$.Body ws:id="body">text</$.Body>),
         metas,
         instanceSelector: ["body"],
       })
@@ -914,7 +972,7 @@ describe("find closest non textual container", () => {
   test("skips non-container instances", () => {
     expect(
       findClosestNonTextualContainer({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.Image ws:id="image" />
@@ -930,7 +988,7 @@ describe("find closest non textual container", () => {
   test("skips containers with text", () => {
     expect(
       findClosestNonTextualContainer({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.Box ws:id="box-with-text">text</$.Box>
@@ -946,12 +1004,10 @@ describe("find closest non textual container", () => {
   test("skips containers with expression", () => {
     expect(
       findClosestNonTextualContainer({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
-              <$.Box ws:id="box-with-expr">
-                {new ExpressionValue("1 + 1")}
-              </$.Box>
+              <$.Box ws:id="box-with-expr">{expression`1 + 1`}</$.Box>
             </$.Box>
           </$.Body>
         ),
@@ -964,7 +1020,7 @@ describe("find closest non textual container", () => {
   test("skips containers with rich text children", () => {
     expect(
       findClosestNonTextualContainer({
-        ...renderJsx(
+        ...renderData(
           <$.Body ws:id="body">
             <$.Box ws:id="box">
               <$.Box ws:id="box-with-bold">
@@ -982,7 +1038,7 @@ describe("find closest non textual container", () => {
   test("allow root with text", () => {
     expect(
       findClosestNonTextualContainer({
-        ...renderJsx(<$.Body ws:id="body">text</$.Body>),
+        ...renderData(<$.Body ws:id="body">text</$.Body>),
         metas,
         instanceSelector: ["body"],
       })

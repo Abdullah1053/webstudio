@@ -2,17 +2,14 @@ import { useMemo, type ComponentProps, type JSX } from "react";
 import type { RgbaColor } from "colord";
 import {
   toValue,
+  type CssProperty,
   type LayersValue,
-  type StyleProperty,
   type StyleValue,
   type TupleValue,
   type UnparsedValue,
 } from "@webstudio-is/css-engine";
-import {
-  EyeconClosedIcon,
-  EyeconOpenIcon,
-  SubtractIcon,
-} from "@webstudio-is/icons";
+import { parseCssValue, propertiesData } from "@webstudio-is/css-data";
+import { EyeClosedIcon, EyeOpenIcon, MinusIcon } from "@webstudio-is/icons";
 import {
   CssValueListArrowFocus,
   CssValueListItem,
@@ -28,7 +25,6 @@ import { repeatUntil } from "~/shared/array-utils";
 import type { ComputedStyleDecl } from "~/shared/style-object-model";
 import { createBatchUpdate, type StyleUpdateOptions } from "./use-style-data";
 import { ColorThumb } from "./color-thumb";
-import { parseCssValue, properties } from "@webstudio-is/css-data";
 
 const isRepeatedValue = (
   styleValue: StyleValue
@@ -36,7 +32,7 @@ const isRepeatedValue = (
   styleValue.type === "layers" || styleValue.type === "tuple";
 
 const reparseComputedValue = (styleDecl: ComputedStyleDecl) => {
-  const property = styleDecl.property as StyleProperty;
+  const property = styleDecl.property;
   const serialized = toValue(styleDecl.computedValue);
   return parseCssValue(property, serialized);
 };
@@ -75,7 +71,7 @@ const isItemHidden = (styleValue: StyleValue, index: number) => {
  */
 const getComputedValue = (styleDecl: ComputedStyleDecl) => {
   if (styleDecl.cascadedValue.type === "var") {
-    const property = styleDecl.property as StyleProperty;
+    const property = styleDecl.property;
     const serialized = toValue(styleDecl.computedValue);
     return parseCssValue(property, serialized);
   }
@@ -105,8 +101,10 @@ const normalizeStyleValue = (
   const items = value.type === itemType ? value.value : [];
   // prefill initial value when no items to repeated
   if (items.length === 0 && primaryItemsCount > 0) {
-    const meta = properties[styleDecl.property as keyof typeof properties];
-    items.push(meta.initial as unknown as UnparsedValue);
+    const meta = propertiesData[styleDecl.property];
+    if (meta) {
+      items.push(meta.initial as UnparsedValue);
+    }
   }
   return {
     type: itemType,
@@ -116,7 +114,7 @@ const normalizeStyleValue = (
 
 export const addRepeatedStyleItem = (
   styles: ComputedStyleDecl[],
-  newItems: Map<StyleProperty, StyleValue>
+  newItems: Map<CssProperty, StyleValue>
 ) => {
   if (styles[0].cascadedValue.type === "var") {
     const primaryValue = reparseComputedValue(styles[0]);
@@ -154,8 +152,10 @@ export const addRepeatedStyleItem = (
     } else if (styleDecl.cascadedValue.type === valueType) {
       oldItems = repeatUntil(styleDecl.cascadedValue.value, primaryCount);
     } else if (primaryCount > 0) {
-      const meta = properties[property as keyof typeof properties];
-      oldItems = repeatUntil([meta.initial], primaryCount);
+      const meta = propertiesData[property];
+      if (meta) {
+        oldItems = repeatUntil([meta.initial], primaryCount);
+      }
     }
     batch.setProperty(property)({
       type: valueType,
@@ -168,7 +168,7 @@ export const addRepeatedStyleItem = (
 export const editRepeatedStyleItem = (
   styles: ComputedStyleDecl[],
   index: number,
-  newItems: Map<StyleProperty, StyleValue>,
+  newItems: Map<CssProperty, StyleValue>,
   options?: StyleUpdateOptions
 ) => {
   const batch = createBatchUpdate();
@@ -230,7 +230,7 @@ export const setRepeatedStyleItem = (
   const newItems: StyleValue[] = repeatUntil(oldItems, index);
   // unpack item when layers or tuple is provided
   newItems[index] = newItem.type === valueType ? newItem.value[0] : newItem;
-  batch.setProperty(styleDecl.property as StyleProperty)({
+  batch.setProperty(styleDecl.property)({
     type: valueType,
     value: newItems as UnparsedValue[],
   });
@@ -247,7 +247,7 @@ export const deleteRepeatedStyleItem = (
     ? primaryValue.value.length
     : index + 1;
   for (const styleDecl of styles) {
-    const property = styleDecl.property as StyleProperty;
+    const property = styleDecl.property;
     const newValue = structuredClone(styleDecl.cascadedValue);
     if (isRepeatedValue(newValue)) {
       newValue.value = repeatUntil(newValue.value, primaryCount);
@@ -278,7 +278,7 @@ export const toggleRepeatedStyleItem = (
     : index + 1;
   const isHidden = isItemHidden(primaryValue, index);
   for (const styleDecl of styles) {
-    const property = styleDecl.property as StyleProperty;
+    const property = styleDecl.property;
     const newValue = structuredClone(styleDecl.cascadedValue);
     if (newValue.type === "var") {
       newValue.hidden = !isHidden;
@@ -317,7 +317,7 @@ export const swapRepeatedStyleItems = (
       newValue.value.splice(oldIndex, 1);
       newValue.value.splice(newIndex, 0, oldItem);
     }
-    batch.setProperty(styleDecl.property as StyleProperty)(newValue);
+    batch.setProperty(styleDecl.property)(newValue);
   }
   batch.publish();
 };
@@ -394,7 +394,7 @@ export const RepeatedStyle = (props: {
             >
               <CssValueListItem
                 id={id}
-                draggable={true}
+                draggable
                 active={dragItemId === id}
                 index={index}
                 label={<Label truncate>{itemLabel}</Label>}
@@ -410,9 +410,7 @@ export const RepeatedStyle = (props: {
                       pressed={isHidden}
                       disabled={false === canBeChanged}
                       tabIndex={-1}
-                      icon={
-                        isHidden ? <EyeconClosedIcon /> : <EyeconOpenIcon />
-                      }
+                      icon={isHidden ? <EyeClosedIcon /> : <EyeOpenIcon />}
                       onPressedChange={() =>
                         toggleRepeatedStyleItem(styles, index)
                       }
@@ -421,7 +419,7 @@ export const RepeatedStyle = (props: {
                       variant="destructive"
                       disabled={false === canBeChanged}
                       tabIndex={-1}
-                      icon={<SubtractIcon />}
+                      icon={<MinusIcon />}
                       onClick={() => deleteRepeatedStyleItem(styles, index)}
                     />
                   </>

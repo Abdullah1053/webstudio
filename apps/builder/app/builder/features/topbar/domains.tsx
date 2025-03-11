@@ -26,8 +26,8 @@ import {
   useOptimistic,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
-import { formatDistance } from "date-fns/formatDistance";
 import { Entri } from "./entri";
 import { nativeClient } from "~/shared/trpc/trpc-client";
 import { useStore } from "@nanostores/react";
@@ -36,6 +36,7 @@ import { extractCname } from "./cname";
 import { useEffectEvent } from "~/shared/hook-utils/effect-event";
 import DomainCheckbox from "./domain-checkbox";
 import { CopyToClipboard } from "~/builder/shared/copy-to-clipboard";
+import { RelativeTime } from "~/builder/shared/relative-time";
 
 export type Domain = Project["domainsVirtual"][number];
 type DomainStatus = Project["domainsVirtual"][number]["status"];
@@ -77,13 +78,12 @@ export const getPublishStatusAndText = ({
         ? "Publish failed"
         : "Publishing started";
 
-  const statusText = `${textStart} ${formatDistance(
-    new Date(createdAt),
-    new Date(),
-    {
-      addSuffix: true,
-    }
-  )}`;
+  const statusText = (
+    <>
+      {textStart}
+      <RelativeTime time={new Date(createdAt)} />
+    </>
+  );
 
   return { statusText, status };
 };
@@ -95,7 +95,7 @@ const getStatusText = (props: {
   const status = getStatus(props.projectDomain);
 
   let isVerifiedActive = false;
-  let text = "Something went wrong";
+  let text: ReactNode = "Something went wrong";
 
   switch (status) {
     case "UNVERIFIED":
@@ -146,12 +146,12 @@ const StatusIcon = (props: { projectDomain: Domain; isLoading: boolean }) => {
   return (
     <Tooltip content={text}>
       <Flex
-        align={"center"}
-        justify={"center"}
+        align="center"
+        justify="center"
         css={{
           cursor: "pointer",
-          width: theme.spacing[12],
-          height: theme.spacing[12],
+          width: theme.sizes.controlHeight,
+          height: theme.sizes.controlHeight,
           color: props.isLoading
             ? theme.colors.foregroundDisabled
             : isVerifiedActive

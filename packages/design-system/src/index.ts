@@ -13,6 +13,7 @@ export * from "./components/label";
 export * from "./components/select";
 export * from "./components/combobox";
 export * from "./components/dropdown-menu";
+export * from "./components/context-menu";
 export * from "./components/icon-button"; // mostly aligned, but needs a demo and to use tokens
 export * from "./components/toggle-button";
 export * from "./components/dialog";
@@ -70,8 +71,6 @@ export * from "./components/pro-badge";
 
 // No need to align
 
-export { useId } from "@radix-ui/react-id";
-export * as Portal from "@radix-ui/react-portal";
 export { Box } from "./components/box";
 export { Flex } from "./components/flex";
 export { Grid } from "./components/grid";

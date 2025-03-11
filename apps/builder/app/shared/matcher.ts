@@ -6,9 +6,9 @@ import {
   type MatcherOperation,
   type MatcherRelation,
   type WebstudioFragment,
+  type WsComponentMeta,
 } from "@webstudio-is/sdk";
 import type { InstanceSelector } from "./tree-utils";
-import type { WsComponentMeta } from "@webstudio-is/react-sdk";
 
 const isNegated = (operation?: MatcherOperation) => {
   return operation?.$neq !== undefined || operation?.$nin !== undefined;
@@ -234,6 +234,47 @@ export const isTreeMatching = ({
   return matches;
 };
 
+export const isInstanceDetachable = ({
+  instances,
+  metas,
+  instanceSelector,
+}: {
+  instances: Instances;
+  metas: Map<string, WsComponentMeta>;
+  instanceSelector: InstanceSelector;
+}) => {
+  const [instanceId, parentId] = instanceSelector;
+  const newInstances = new Map(instances);
+  // replace parent with the one without selected instance
+  let parentInstance = newInstances.get(parentId);
+  if (parentInstance) {
+    parentInstance = {
+      ...parentInstance,
+      children: parentInstance.children.filter(
+        (child) => child.type === "id" && child.value !== instanceId
+      ),
+    };
+    newInstances.set(parentInstance.id, parentInstance);
+  }
+  // skip self
+  for (let index = 1; index < instanceSelector.length; index += 1) {
+    const instance = newInstances.get(instanceSelector[index]);
+    if (instance === undefined) {
+      continue;
+    }
+    const meta = metas.get(instance.component);
+    const matches = isInstanceMatching({
+      instances: newInstances,
+      instanceSelector: instanceSelector.slice(index),
+      query: meta?.constraints,
+    });
+    if (matches === false) {
+      return false;
+    }
+  }
+  return true;
+};
+
 export const findClosestInstanceMatchingFragment = ({
   instances,
   metas,
@@ -335,7 +376,10 @@ export const findClosestNonTextualContainer = ({
     if (instance === undefined) {
       continue;
     }
-    let hasText = false;
+    const meta = metas.get(instance.component);
+    // placeholder exists only inside of empty instances
+    let hasText =
+      meta?.placeholder !== undefined && instance.children.length === 0;
     for (const child of instance.children) {
       if (child.type === "text" || child.type === "expression") {
         hasText = true;
@@ -351,7 +395,6 @@ export const findClosestNonTextualContainer = ({
     if (hasText) {
       continue;
     }
-    const meta = metas.get(instance.component);
     if (meta?.type === "container") {
       return index;
     }

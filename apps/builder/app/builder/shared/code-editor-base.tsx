@@ -25,7 +25,7 @@ import {
   historyKeymap,
   indentWithTab,
 } from "@codemirror/commands";
-import { syntaxHighlighting } from "@codemirror/language";
+import { foldGutter, syntaxHighlighting } from "@codemirror/language";
 import {
   theme,
   textVariants,
@@ -40,6 +40,7 @@ import {
   FloatingPanel,
 } from "@webstudio-is/design-system";
 import { MaximizeIcon } from "@webstudio-is/icons";
+import { ChevronDownIcon, ChevronRightIcon } from "@webstudio-is/icons/svg";
 import { solarizedLight } from "./code-highlight";
 
 // This undocumented flag is required to keep contenteditable fields editable after the first activation of EditorView.
@@ -121,6 +122,14 @@ const editorContentStyle = css({
     textDecoration: "underline wavy red",
     backgroundColor: "rgba(255, 0, 0, 0.1)",
   },
+  ".cm-lintRange-warning": {
+    textDecoration: "underline wavy orange",
+    backgroundColor: "rgba(255, 0, 0, 0.1)",
+  },
+  ".cm-gutters": {
+    backgroundColor: "transparent",
+    border: 0,
+  },
 });
 
 const shortcutStyle = css({
@@ -188,6 +197,17 @@ const keyBindings = [
   indentWithTab,
 ];
 
+export const foldGutterExtension = foldGutter({
+  markerDOM: (isOpen) => {
+    const div = document.createElement("div");
+    div.style.width = "16px";
+    div.style.height = "16px";
+    div.style.cursor = "pointer";
+    div.innerHTML = isOpen ? ChevronDownIcon : ChevronRightIcon;
+    return div;
+  },
+});
+
 export type EditorApi = {
   replaceSelection: (string: string) => void;
   focus: () => void;
@@ -252,7 +272,6 @@ export const EditorContent = ({
   }, []);
 
   // setup editor
-
   useEffect(() => {
     if (editorRef.current === null) {
       return;
@@ -261,13 +280,17 @@ export const EditorContent = ({
       doc: "",
       parent: editorRef.current,
     });
-    if (autoFocus) {
-      view.focus();
-    }
+
     viewRef.current = view;
     return () => {
       view.destroy();
     };
+  }, []);
+
+  useEffect(() => {
+    if (autoFocus) {
+      viewRef.current?.focus();
+    }
   }, [autoFocus]);
 
   // update extensions whenever variables data is changed
@@ -348,6 +371,7 @@ export const EditorContent = ({
     if (value === view.state.doc.toString()) {
       return;
     }
+
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: value },
       annotations: [ExternalChange.of(true)],
@@ -360,6 +384,7 @@ export const EditorContent = ({
       if (view === undefined) {
         return;
       }
+
       view.dispatch(view.state.replaceSelection(string));
       view.focus();
     },
@@ -441,7 +466,7 @@ export const EditorDialog = ({
       height={height}
       placement={placement}
       maximizable
-      resize="auto"
+      resize="both"
       content={
         <Grid
           align="stretch"

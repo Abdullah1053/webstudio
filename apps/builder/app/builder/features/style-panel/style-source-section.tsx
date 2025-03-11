@@ -335,7 +335,7 @@ const $componentStates = computed(
 );
 
 type StyleSourceInputItem = {
-  id: string;
+  id: StyleSource["id"];
   label: string;
   disabled: boolean;
   source: ItemSource;
@@ -422,7 +422,7 @@ export const StyleSourcesSection = () => {
           setEditingItem(id);
         }}
         onClearStyles={clearStyles}
-        onRemoveItem={(id) => {
+        onDetachItem={(id) => {
           removeStyleSourceFromInstance(id);
         }}
         onDeleteItem={(id) => {

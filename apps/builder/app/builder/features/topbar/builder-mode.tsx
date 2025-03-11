@@ -20,11 +20,8 @@ import {
   ToolbarToggleItem,
   Tooltip,
   Text,
-} from "@webstudio-is/design-system";
-import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuPortal,
   DropdownMenuTrigger,
 } from "@webstudio-is/design-system";
 import {
@@ -33,10 +30,10 @@ import {
   $isDesignModeAllowed,
   isBuilderMode,
   setBuilderMode,
-  toggleBuilderMode,
 } from "~/shared/nano-states";
 import { useState } from "react";
 import { isFeatureEnabled } from "@webstudio-is/feature-flags";
+import { emitCommand } from "~/builder/shared/commands";
 
 export const BuilderModeDropDown = () => {
   const builderMode = useStore($builderMode);
@@ -86,7 +83,7 @@ export const BuilderModeDropDown = () => {
           type="single"
           value={builderMode}
           onValueChange={() => {
-            toggleBuilderMode("preview");
+            emitCommand("togglePreviewMode");
           }}
         >
           <ToolbarToggleItem variant="preview" value="preview">
@@ -107,53 +104,51 @@ export const BuilderModeDropDown = () => {
             </ToolbarToggleItem>
           </DropdownMenuTrigger>
         </Tooltip>
-        <DropdownMenuPortal>
-          <DropdownMenuContent
-            sideOffset={4}
-            collisionPadding={16}
-            side="bottom"
-            loop
+        <DropdownMenuContent
+          sideOffset={4}
+          collisionPadding={16}
+          side="bottom"
+          loop
+        >
+          <DropdownMenuRadioGroup
+            value={builderMode}
+            onValueChange={(value) => {
+              if (isBuilderMode(value)) {
+                setBuilderMode(value);
+              }
+            }}
           >
-            <DropdownMenuRadioGroup
-              value={builderMode}
-              onValueChange={(value) => {
-                if (isBuilderMode(value)) {
-                  setBuilderMode(value);
-                }
-              }}
-            >
-              {Object.entries(menuItems)
-                .filter(([_, { enabled }]) => enabled)
-                .map(([mode, { icon, title, shortcut }]) => (
-                  <DropdownMenuRadioItem
-                    key={mode}
-                    value={mode}
-                    onFocus={handleFocus(mode as keyof typeof menuItems)}
-                    onBlur={handleBlur}
-                    icon={<MenuCheckedIcon />}
-                  >
-                    <Flex css={{ px: theme.spacing[3] }} gap={2}>
-                      {icon}
-                      <Box>{title}</Box>
-                    </Flex>
-                    <DropdownMenuItemRightSlot>
-                      <Kbd value={shortcut} />
-                    </DropdownMenuItemRightSlot>
-                    &nbsp;
-                  </DropdownMenuRadioItem>
-                ))}
-            </DropdownMenuRadioGroup>
-            <DropdownMenuSeparator />
+            {Object.entries(menuItems)
+              .filter(([_, { enabled }]) => enabled)
+              .map(([mode, { icon, title, shortcut }]) => (
+                <DropdownMenuRadioItem
+                  key={mode}
+                  value={mode}
+                  onFocus={handleFocus(mode as keyof typeof menuItems)}
+                  onBlur={handleBlur}
+                  icon={<MenuCheckedIcon />}
+                >
+                  <Flex css={{ px: theme.spacing[3] }} gap={2}>
+                    {icon}
+                    <Box>{title}</Box>
+                  </Flex>
+                  <DropdownMenuItemRightSlot>
+                    <Kbd value={shortcut} />
+                  </DropdownMenuItemRightSlot>
+                  &nbsp;
+                </DropdownMenuRadioItem>
+              ))}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
 
-            <div className={menuItemCss({ hint: true })}>
-              <Box css={{ width: theme.spacing[25] }}>
-                {activeMode
-                  ? menuItems[activeMode].description
-                  : "Select Design or Content mode"}
-              </Box>
-            </div>
-          </DropdownMenuContent>
-        </DropdownMenuPortal>
+          <div className={menuItemCss({ hint: true })}>
+            <Box css={{ width: theme.spacing[25] }}>
+              {activeMode
+                ? menuItems[activeMode].description
+                : "Select Design or Content mode"}
+            </Box>
+          </div>
+        </DropdownMenuContent>
       </DropdownMenu>
     </Flex>
   );

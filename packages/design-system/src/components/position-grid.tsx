@@ -36,7 +36,7 @@ const containerStyle = css({
   padding: theme.spacing[4],
   width: "fit-content",
   borderRadius: theme.borderRadius[4],
-  border: `1px solid ${theme.colors.borderMain}`,
+  border: `1px solid transparent`,
   outline: "none",
   gridTemplateColumns: "repeat(3, 1fr)",
   gridTemplateAreas: `
@@ -65,7 +65,7 @@ const dotStyle = css({
     borderRadius: "50%",
   },
   "&[data-selected=true], &:hover": {
-    background: theme.colors.backgroundHover,
+    background: theme.colors.foregroundGridControlsFlexHover,
     "&::before": {
       background: theme.colors.foregroundGridControlsDotHover,
     },

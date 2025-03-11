@@ -1,31 +1,81 @@
 import { Fragment, type JSX, type ReactNode } from "react";
-import type { Instance, Instances, Prop, Props } from "@webstudio-is/sdk";
+import { encodeDataSourceVariable, getStyleDeclKey } from "@webstudio-is/sdk";
+import type {
+  Breakpoint,
+  DataSource,
+  Instance,
+  Prop,
+  Resource,
+  StyleDecl,
+  StyleSource,
+  StyleSourceSelection,
+  WebstudioData,
+  WebstudioFragment,
+} from "@webstudio-is/sdk";
+import { showAttribute } from "@webstudio-is/react-sdk";
+import type { TemplateStyleDecl } from "./css";
 
-export class ExpressionValue {
-  value: string;
-  constructor(expression: string) {
-    this.value = expression;
+export class Variable {
+  name: string;
+  initialValue: unknown;
+  constructor(name: string, initialValue: unknown) {
+    this.name = name;
+    this.initialValue = initialValue;
   }
 }
 
-export class ParameterValue {
-  value: string;
-  constructor(dataSourceId: string) {
-    this.value = dataSourceId;
+export class Parameter {
+  name: string;
+  constructor(name: string) {
+    this.name = name;
   }
 }
+
+type ResourceConfig = {
+  url: Expression;
+  method: Resource["method"];
+  headers: Array<{ name: string; value: Expression }>;
+  body?: Expression;
+};
 
 export class ResourceValue {
-  value: string;
-  constructor(resourceId: string) {
-    this.value = resourceId;
+  name: string;
+  config: ResourceConfig;
+  constructor(name: string, config: ResourceConfig) {
+    this.name = name;
+    this.config = config;
   }
 }
 
+class Expression {
+  chunks: string[];
+  variables: Array<Variable | Parameter | ResourceValue>;
+  constructor(
+    chunks: string[],
+    variables: Array<Variable | Parameter | ResourceValue>
+  ) {
+    this.chunks = chunks;
+    this.variables = variables;
+  }
+}
+
+export const expression = (
+  chunks: TemplateStringsArray,
+  ...variables: Array<Variable | Parameter>
+): Expression => {
+  return new Expression(Array.from(chunks), variables);
+};
+
 export class ActionValue {
-  value: { type: "execute"; args: string[]; code: string };
-  constructor(args: string[], code: string) {
-    this.value = { type: "execute", args, code };
+  args: string[];
+  expression: Expression;
+  constructor(args: string[], code: string | Expression) {
+    this.args = args;
+    if (typeof code === "string") {
+      this.expression = new Expression([code], []);
+    } else {
+      this.expression = code;
+    }
   }
 }
 
@@ -47,6 +97,18 @@ export class PageValue {
   }
 }
 
+export class PlaceholderValue {
+  value: string;
+  constructor(text: string) {
+    this.value = text;
+  }
+}
+
+const isChildValue = (child: unknown) =>
+  typeof child === "string" ||
+  child instanceof PlaceholderValue ||
+  child instanceof Expression;
+
 const traverseJsx = (
   element: JSX.Element,
   callback: (
@@ -62,10 +124,7 @@ const traverseJsx = (
   const result: Instance["children"] = [];
   if (element.type === Fragment) {
     for (const child of children) {
-      if (typeof child === "string") {
-        continue;
-      }
-      if (child instanceof ExpressionValue) {
+      if (isChildValue(child)) {
         continue;
       }
       result.push(...traverseJsx(child, callback));
@@ -75,10 +134,7 @@ const traverseJsx = (
   const child = callback(element, children);
   result.push(child);
   for (const child of children) {
-    if (typeof child === "string") {
-      continue;
-    }
-    if (child instanceof ExpressionValue) {
+    if (isChildValue(child)) {
       continue;
     }
     traverseJsx(child, callback);
@@ -86,48 +142,174 @@ const traverseJsx = (
   return result;
 };
 
-type WebstudioTemplate = {
-  children: Instance["children"];
-  instances: Instance[];
-  props: Prop[];
-};
-
-export const renderTemplate = (root: JSX.Element): WebstudioTemplate => {
+export const renderTemplate = (
+  root: JSX.Element,
+  generateId?: () => string
+): WebstudioFragment => {
   let lastId = -1;
   const instances: Instance[] = [];
   const props: Prop[] = [];
+  const breakpoints: Breakpoint[] = [];
+  const styleSources: StyleSource[] = [];
+  const styleSourceSelections: StyleSourceSelection[] = [];
+  const styles: StyleDecl[] = [];
+  const dataSources = new Map<Variable | Parameter, DataSource>();
+  const resources = new Map<ResourceValue, Resource>();
   const ids = new Map<unknown, string>();
   const getId = (key: unknown) => {
     let id = ids.get(key);
     if (id === undefined) {
       lastId += 1;
-      id = lastId.toString();
+      id = generateId?.() ?? lastId.toString();
       ids.set(key, id);
     }
     return id;
   };
+  const getVariableId = (
+    instanceId: string,
+    variable: Variable | Parameter
+  ) => {
+    const id = getId(variable);
+    if (dataSources.has(variable)) {
+      return id;
+    }
+    if (variable instanceof Variable) {
+      let value: Extract<DataSource, { type: "variable" }>["value"];
+      if (typeof variable.initialValue === "string") {
+        value = { type: "string", value: variable.initialValue };
+      } else if (typeof variable.initialValue === "number") {
+        value = { type: "number", value: variable.initialValue };
+      } else if (typeof variable.initialValue === "boolean") {
+        value = { type: "boolean", value: variable.initialValue };
+      } else {
+        value = { type: "json", value: variable.initialValue };
+      }
+      dataSources.set(variable, {
+        type: "variable",
+        scopeInstanceId: instanceId,
+        id,
+        name: variable.name,
+        value,
+      });
+    }
+    if (variable instanceof Parameter) {
+      dataSources.set(variable, {
+        type: "parameter",
+        scopeInstanceId: instanceId,
+        id,
+        name: variable.name,
+      });
+    }
+    if (variable instanceof ResourceValue) {
+      dataSources.set(variable, {
+        type: "resource",
+        scopeInstanceId: instanceId,
+        id,
+        name: variable.name,
+        resourceId: getResourceId(instanceId, variable),
+      });
+    }
+    return id;
+  };
+  const compileExpression = (instanceId: string, expression: Expression) => {
+    const values = expression.variables.map((variable) =>
+      getVariableId(instanceId, variable)
+    );
+    return String.raw(
+      { raw: expression.chunks },
+      ...values.map(encodeDataSourceVariable)
+    );
+  };
+  const getResourceId = (instanceId: string, resourceValue: ResourceValue) => {
+    const id = `resource:${getId(resourceValue)}`;
+    if (resources.has(resourceValue)) {
+      return id;
+    }
+    resources.set(resourceValue, {
+      id,
+      name: resourceValue.name,
+      url: compileExpression(instanceId, resourceValue.config.url),
+      method: resourceValue.config.method,
+      headers: resourceValue.config.headers.map(({ name, value }) => ({
+        name,
+        value: compileExpression(instanceId, value),
+      })),
+      body: resourceValue.config.body
+        ? compileExpression(instanceId, resourceValue.config.body)
+        : undefined,
+    });
+    return id;
+  };
+  // lazily create breakpoint
+  const getBreakpointId = () => {
+    if (breakpoints.length > 0) {
+      return breakpoints[0].id;
+    }
+    const breakpointId = "base";
+    breakpoints.push({
+      id: breakpointId,
+      label: "",
+    });
+    return breakpointId;
+  };
   const children = traverseJsx(root, (element, children) => {
     const instanceId = element.props?.["ws:id"] ?? getId(element);
-    for (const [name, value] of Object.entries({ ...element.props })) {
+    for (const entry of Object.entries({ ...element.props })) {
+      const [_name, value] = entry;
+      let [name] = entry;
       if (name === "ws:id" || name === "ws:label" || name === "children") {
         continue;
       }
-      const propId = `${instanceId}:${name}`;
-      const base = { id: propId, instanceId, name };
-      if (value instanceof ExpressionValue) {
-        props.push({ ...base, type: "expression", value: value.value });
+      if (name === "ws:style") {
+        const styleSourceId = `${instanceId}:${name}`;
+        styleSources.push({
+          type: "local",
+          id: styleSourceId,
+        });
+        styleSourceSelections.push({
+          instanceId,
+          values: [styleSourceId],
+        });
+        const localStyles = value as TemplateStyleDecl[];
+        for (const styleDecl of localStyles) {
+          styles.push({
+            breakpointId: getBreakpointId(),
+            styleSourceId,
+            ...styleDecl,
+          });
+        }
         continue;
       }
-      if (value instanceof ParameterValue) {
-        props.push({ ...base, type: "parameter", value: value.value });
+      if (name === "ws:show") {
+        name = showAttribute;
+      }
+      const propId = `${instanceId}:${name}`;
+      const base = { id: propId, instanceId, name };
+      if (value instanceof Expression) {
+        props.push({
+          ...base,
+          type: "expression",
+          value: compileExpression(instanceId, value),
+        });
+        continue;
+      }
+      if (value instanceof Parameter) {
+        props.push({
+          ...base,
+          type: "parameter",
+          value: getVariableId(instanceId, value),
+        });
         continue;
       }
       if (value instanceof ResourceValue) {
-        props.push({ ...base, type: "resource", value: value.value });
+        const resourceId = getResourceId(instanceId, value);
+        props.push({ ...base, type: "resource", value: resourceId });
         continue;
       }
       if (value instanceof ActionValue) {
-        props.push({ ...base, type: "action", value: [value.value] });
+        const code = compileExpression(instanceId, value.expression);
+        const action = { type: "execute" as const, args: value.args, code };
+        props.push({ ...base, type: "action", value: [action] });
         continue;
       }
       if (value instanceof AssetValue) {
@@ -160,13 +342,19 @@ export const renderTemplate = (root: JSX.Element): WebstudioTemplate => {
       ...(element.props?.["ws:label"]
         ? { label: element.props?.["ws:label"] }
         : undefined),
-      children: children.map((child) =>
-        typeof child === "string"
-          ? { type: "text", value: child }
-          : child instanceof ExpressionValue
-            ? { type: "expression", value: child.value }
-            : { type: "id", value: child.props?.["ws:id"] ?? getId(child) }
-      ),
+      children: children.map((child): Instance["children"][number] => {
+        if (typeof child === "string") {
+          return { type: "text", value: child };
+        }
+        if (child instanceof PlaceholderValue) {
+          return { type: "text", value: child.value, placeholder: true };
+        }
+        if (child instanceof Expression) {
+          const expression = compileExpression(instanceId, child);
+          return { type: "expression", value: expression };
+        }
+        return { type: "id", value: child.props?.["ws:id"] ?? getId(child) };
+      }),
     };
     instances.push(instance);
     return { type: "id", value: instance.id };
@@ -175,21 +363,43 @@ export const renderTemplate = (root: JSX.Element): WebstudioTemplate => {
     children,
     instances,
     props,
+    breakpoints,
+    styleSources,
+    styleSourceSelections,
+    styles,
+    dataSources: Array.from(dataSources.values()),
+    resources: Array.from(resources.values()),
+    assets: [],
   };
 };
 
-export const renderJsx = (
-  root: JSX.Element
-): {
-  instances: Instances;
-  props: Props;
-} => {
-  const fragment = renderTemplate(root);
+export const renderData = (
+  root: JSX.Element,
+  generateId?: () => string
+): Omit<WebstudioData, "pages"> => {
+  const {
+    instances,
+    props,
+    breakpoints,
+    styleSources,
+    styleSourceSelections,
+    styles,
+    dataSources,
+    resources,
+    assets,
+  } = renderTemplate(root, generateId);
   return {
-    instances: new Map(
-      fragment.instances.map((instance) => [instance.id, instance])
+    instances: new Map(instances.map((item) => [item.id, item])),
+    props: new Map(props.map((item) => [item.id, item])),
+    breakpoints: new Map(breakpoints.map((item) => [item.id, item])),
+    styleSources: new Map(styleSources.map((item) => [item.id, item])),
+    styleSourceSelections: new Map(
+      styleSourceSelections.map((item) => [item.instanceId, item])
     ),
-    props: new Map(fragment.props.map((prop) => [prop.id, prop])),
+    styles: new Map(styles.map((item) => [getStyleDeclKey(item), item])),
+    dataSources: new Map(dataSources.map((item) => [item.id, item])),
+    resources: new Map(resources.map((item) => [item.id, item])),
+    assets: new Map(assets.map((item) => [item.id, item])),
   };
 };
 
@@ -197,7 +407,9 @@ type ComponentProps = Record<string, unknown> &
   Record<`${string}:expression`, string> & {
     "ws:id"?: string;
     "ws:label"?: string;
-    children?: ReactNode | ExpressionValue;
+    "ws:style"?: TemplateStyleDecl[];
+    "ws:show"?: boolean | Expression;
+    children?: ReactNode | Expression | PlaceholderValue;
   };
 
 type Component = { displayName: string } & ((

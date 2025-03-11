@@ -16,7 +16,7 @@ import {
 import { publish, useSubscribe } from "~/shared/pubsub";
 import {
   getComponentTemplateData,
-  insertTemplateData,
+  insertWebstudioFragmentAt,
   reparentInstance,
 } from "~/shared/instance-utils";
 import {
@@ -30,6 +30,7 @@ import {
   getAncestorInstanceSelector,
 } from "~/shared/tree-utils";
 import {
+  findClosestContainer,
   findClosestInstanceMatchingFragment,
   isTreeMatching,
 } from "~/shared/matcher";
@@ -67,7 +68,16 @@ const findClosestDroppableInstanceSelector = (
   const instances = $instances.get();
   const metas = $registeredComponentMetas.get();
 
-  let droppableIndex = -1;
+  // prevent dropping anything into non containers like image
+  let droppableIndex = findClosestContainer({
+    metas,
+    instances,
+    instanceSelector,
+  });
+  if (droppableIndex === -1) {
+    return;
+  }
+  instanceSelector = instanceSelector.slice(droppableIndex);
   if (dragPayload?.type === "insert") {
     const fragment = getComponentTemplateData(dragPayload.dragComponent);
     if (fragment) {
@@ -323,7 +333,7 @@ export const useDragAndDrop = () => {
         if (templateData === undefined) {
           return;
         }
-        insertTemplateData(templateData, {
+        insertWebstudioFragmentAt(templateData, {
           parentSelector: dropTarget.itemSelector,
           position: dropTarget.indexWithinChildren,
         });

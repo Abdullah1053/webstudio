@@ -5,7 +5,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { ChevronFilledRightIcon } from "@webstudio-is/icons";
+import { ChevronRightIcon } from "@webstudio-is/icons";
 import { styled } from "../stitches.config";
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import {
@@ -26,10 +26,20 @@ export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
 export const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 
-export const DropdownMenuContent = styled(
+const DropdownMenuContentStyled = styled(
   DropdownMenuPrimitive.Content,
   menuCss
 );
+export const DropdownMenuContent = forwardRef<
+  ElementRef<typeof DropdownMenuContentStyled>,
+  ComponentProps<typeof DropdownMenuContentStyled>
+>((props, ref) => {
+  return (
+    <DropdownMenuPrimitive.Portal>
+      <DropdownMenuContentStyled {...props} ref={ref} />
+    </DropdownMenuPrimitive.Portal>
+  );
+});
 
 const SubContentStyled = styled(DropdownMenuPrimitive.SubContent, subMenuCss);
 export const DropdownMenuSubContent = forwardRef<
@@ -95,7 +105,7 @@ export const DropdownMenuSubTrigger = forwardRef<
     {icon && <div className={menuItemIndicatorCss()}>{icon}</div>}
     {children}
     <DropdownMenuItemRightSlot>
-      <ChevronFilledRightIcon />
+      <ChevronRightIcon />
     </DropdownMenuItemRightSlot>
   </SubTriggerStyled>
 ));
@@ -140,5 +150,3 @@ DropdownMenuCheckboxItem.displayName = "DropdownMenuCheckboxItem";
 export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
-
-export const DropdownMenuPortal = DropdownMenuPrimitive.Portal;

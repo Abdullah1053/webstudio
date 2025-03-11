@@ -1,21 +1,25 @@
 import { useMemo, useEffect, useState, useLayoutEffect, useRef } from "react";
 import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { useStore } from "@nanostores/react";
-import type { Instances } from "@webstudio-is/sdk";
-import {
-  type Components,
-  coreMetas,
-  corePropsMetas,
-} from "@webstudio-is/react-sdk";
+import { type Instances, coreMetas, corePropsMetas } from "@webstudio-is/sdk";
+import { coreTemplates } from "@webstudio-is/sdk/core-templates";
+import type { Components } from "@webstudio-is/react-sdk";
 import { wsImageLoader } from "@webstudio-is/image";
 import { ReactSdkContext } from "@webstudio-is/react-sdk/runtime";
 import * as baseComponents from "@webstudio-is/sdk-components-react";
 import * as baseComponentMetas from "@webstudio-is/sdk-components-react/metas";
 import * as baseComponentPropsMetas from "@webstudio-is/sdk-components-react/props";
 import { hooks as baseComponentHooks } from "@webstudio-is/sdk-components-react/hooks";
+import * as baseComponentTemplates from "@webstudio-is/sdk-components-react/templates";
+import * as animationComponents from "@webstudio-is/sdk-components-animation";
+import * as animationComponentMetas from "@webstudio-is/sdk-components-animation/metas";
+import * as animationComponentPropsMetas from "@webstudio-is/sdk-components-animation/props";
+import * as animationTemplates from "@webstudio-is/sdk-components-animation/templates";
+import { hooks as animationComponentHooks } from "@webstudio-is/sdk-components-animation/hooks";
 import * as radixComponents from "@webstudio-is/sdk-components-react-radix";
 import * as radixComponentMetas from "@webstudio-is/sdk-components-react-radix/metas";
 import * as radixComponentPropsMetas from "@webstudio-is/sdk-components-react-radix/props";
+import * as radixTemplates from "@webstudio-is/sdk-components-react-radix/templates";
 import { hooks as radixComponentHooks } from "@webstudio-is/sdk-components-react-radix/hooks";
 import { ErrorMessage } from "~/shared/error";
 import { $publisher, publish } from "~/shared/pubsub";
@@ -218,12 +222,14 @@ export const Canvas = () => {
       components: {},
       metas: coreMetas,
       propsMetas: corePropsMetas,
+      templates: coreTemplates,
     });
     registerComponentLibrary({
       components: baseComponents,
       metas: baseComponentMetas,
       propsMetas: baseComponentPropsMetas,
       hooks: baseComponentHooks,
+      templates: baseComponentTemplates,
     });
     registerComponentLibrary({
       components: {
@@ -233,6 +239,7 @@ export const Canvas = () => {
       },
       metas: {},
       propsMetas: {},
+      templates: {},
     });
     registerComponentLibrary({
       namespace: "@webstudio-is/sdk-components-react-radix",
@@ -240,6 +247,15 @@ export const Canvas = () => {
       metas: radixComponentMetas,
       propsMetas: radixComponentPropsMetas,
       hooks: radixComponentHooks,
+      templates: radixTemplates,
+    });
+    registerComponentLibrary({
+      namespace: "@webstudio-is/sdk-components-animation",
+      components: animationComponents,
+      metas: animationComponentMetas,
+      propsMetas: animationComponentPropsMetas,
+      hooks: animationComponentHooks,
+      templates: animationTemplates,
     });
   });
 

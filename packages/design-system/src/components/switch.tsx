@@ -8,7 +8,7 @@ import * as Primitive from "@radix-ui/react-switch";
 import { type CSS, css, theme } from "../stitches.config";
 
 const padding = theme.spacing[1];
-const thumbOffset = `calc(${padding} + ${theme.spacing[2]})`;
+const thumbOffset = `calc(${padding} + ${theme.spacing[1]})`;
 
 const switchStyle = css({
   all: "unset", // reset <button>
@@ -30,9 +30,10 @@ const switchStyle = css({
     backgroundColor: theme.colors.backgroundNeutralDark,
   },
 
-  "&[data-state=checked]:not([data-disabled]):before": {
-    backgroundColor: theme.colors.backgroundPrimary,
-  },
+  "&[data-state=checked]:not([data-disabled]):before, &[aria-checked=true]:not([data-disabled]):before":
+    {
+      backgroundColor: theme.colors.backgroundPrimary,
+    },
 
   "&[data-disabled]:before": {
     backgroundColor: theme.colors.foregroundDisabled,
@@ -44,8 +45,8 @@ const switchStyle = css({
 });
 
 const thumbStyle = css({
-  width: theme.spacing[6],
-  height: theme.spacing[6],
+  width: theme.spacing[7],
+  height: theme.spacing[7],
   borderRadius: theme.borderRadius.round,
   backgroundColor: theme.colors.foregroundContrastMain,
   position: "absolute",

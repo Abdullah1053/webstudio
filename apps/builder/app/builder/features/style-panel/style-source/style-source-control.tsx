@@ -1,7 +1,6 @@
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuPortal,
   DropdownMenuTrigger,
   Text,
   styled,
@@ -97,14 +96,12 @@ const Menu = (props: MenuProps) => {
           <ChevronDownIcon style={{ position: "relative" }} />
         </MenuTrigger>
       </DropdownMenuTrigger>
-      <DropdownMenuPortal>
-        <DropdownMenuContent
-          onCloseAutoFocus={(event) => event.preventDefault()}
-          css={{ maxWidth: theme.spacing[24] }}
-        >
-          {props.children}
-        </DropdownMenuContent>
-      </DropdownMenuPortal>
+      <DropdownMenuContent
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        css={{ maxWidth: theme.spacing[24] }}
+      >
+        {props.children}
+      </DropdownMenuContent>
     </DropdownMenu>
   );
 };
@@ -241,6 +238,28 @@ const StyleSourceState = styled(Text, {
   },
 });
 
+const LocalStyleIcon = ({ size = 16, showDot = true }) => {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="none">
+      <path
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8 14.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13Z"
+      />
+      {showDot && (
+        <path
+          fill="currentColor"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M8 9.333a1.333 1.333 0 1 0 0-2.666 1.333 1.333 0 0 0 0 2.666Z"
+        />
+      )}
+    </svg>
+  );
+};
+
 const errors = {
   minlength: "Token must be at least 1 character long",
   duplicate: "Token already exists",
@@ -254,7 +273,7 @@ export type StyleSourceError = {
 type StyleSourceControlProps = {
   id: StyleSource["id"];
   error?: StyleSourceError;
-  children: ReactNode;
+  label: string;
   menuItems: ReactNode;
   selected: boolean;
   state: undefined | string;
@@ -262,6 +281,7 @@ type StyleSourceControlProps = {
   disabled: boolean;
   isEditing: boolean;
   isDragging: boolean;
+  hasStyles: boolean;
   source: ItemSource;
   onSelect: () => void;
   onChangeValue: (value: string) => void;
@@ -278,14 +298,14 @@ export const StyleSourceControl = ({
   disabled,
   isEditing,
   isDragging,
+  hasStyles,
   source,
-  children,
+  label,
   onChangeValue,
   onChangeEditing,
   onSelect,
 }: StyleSourceControlProps) => {
   const showMenu = isEditing === false && isDragging === false;
-
   return (
     <Tooltip
       content={error ? errors[error.type] : ""}
@@ -300,22 +320,33 @@ export const StyleSourceControl = ({
         role="button"
         hasError={error !== undefined}
       >
-        <Flex grow css={{ py: theme.spacing[2], px: theme.spacing[3] }}>
+        <Flex grow css={{ padding: theme.spacing[2] }}>
           <StyleSourceButton
             disabled={disabled || isEditing}
             isEditing={isEditing}
-            onClick={onSelect}
             tabIndex={-1}
+            onClick={onSelect}
           >
-            {typeof children === "string" ? (
-              <EditableText
-                isEditing={isEditing}
-                onChangeEditing={onChangeEditing}
-                onChangeValue={onChangeValue}
-                value={children}
-              />
+            {source === "local" ? (
+              <Flex justify="center" align="center">
+                <Box
+                  // We need this so that the small local button has a bigger clickable surface
+                  css={{ position: "absolute", inset: 0 }}
+                />
+                <LocalStyleIcon showDot={hasStyles} />
+              </Flex>
             ) : (
-              children
+              <Flex align="center" justify="center" gap="1">
+                <EditableText
+                  isEditing={isEditing}
+                  onChangeEditing={onChangeEditing}
+                  onChangeValue={onChangeValue}
+                  value={label}
+                />
+                {hasStyles === false && isEditing === false && (
+                  <LocalStyleIcon showDot={hasStyles} />
+                )}
+              </Flex>
             )}
           </StyleSourceButton>
         </Flex>

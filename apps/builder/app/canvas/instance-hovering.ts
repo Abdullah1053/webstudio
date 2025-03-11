@@ -78,11 +78,13 @@ export const subscribeInstanceHovering = ({
     updateOnMouseMove = false;
   };
 
-  const unsubscribeTextEditingInstance = $textEditingInstanceSelector.listen(
+  window.addEventListener(
+    "click",
     () => {
       // Fixes the bug if initial editable instance is empty and has collapsed paddings
       setTimeout(updateEditableOutline, 0);
-    }
+    },
+    eventOptions
   );
 
   window.addEventListener("mousemove", updateEditableOutline, eventOptions);
@@ -90,10 +92,10 @@ export const subscribeInstanceHovering = ({
   window.addEventListener(
     "mouseout",
     () => {
-      mouseOutTimeoutId = setTimeout(() => {
-        updateOnMouseMove = false;
-        hoveredElement = undefined;
+      updateOnMouseMove = false;
+      hoveredElement = undefined;
 
+      mouseOutTimeoutId = setTimeout(() => {
         $blockChildOutline.set(undefined);
         $hoveredInstanceSelector.set(undefined);
         $hoveredInstanceOutline.set(undefined);
@@ -216,6 +218,5 @@ export const subscribeInstanceHovering = ({
     clearTimeout(mouseOutTimeoutId);
     unsubscribeHoveredInstanceId();
     usubscribeSelectedInstanceSelector();
-    unsubscribeTextEditingInstance();
   });
 };

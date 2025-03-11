@@ -9,6 +9,7 @@ import {
 } from "@codemirror/autocomplete";
 import { parseCss } from "@webstudio-is/css-data";
 import { css as style } from "@webstudio-is/design-system";
+import type { CssProperty, StyleValue } from "@webstudio-is/css-engine";
 import {
   EditorContent,
   EditorDialog,
@@ -18,7 +19,10 @@ import {
 } from "~/builder/shared/code-editor-base";
 import { $availableVariables } from "./model";
 
-export const parseCssFragment = (css: string, fallbacks: string[]) => {
+export const parseCssFragment = (
+  css: string,
+  fallbacks: string[]
+): Map<CssProperty, StyleValue> => {
   let parsed = parseCss(`.styles{${css}}`);
   if (parsed.length === 0) {
     for (const fallbackProperty of fallbacks) {
@@ -98,11 +102,9 @@ export const CssFragmentEditorContent = ({
 };
 
 export const CssFragmentEditor = ({
-  title,
   content,
   onOpenChange,
 }: {
-  title?: ReactNode;
   content: ReactNode;
   onOpenChange?: (newOpen: boolean) => void;
 }) => {
@@ -112,7 +114,7 @@ export const CssFragmentEditor = ({
         {content}
         <EditorDialog
           onOpenChange={onOpenChange}
-          title={title}
+          title="CSS Value"
           content={content}
         >
           <EditorDialogButton />

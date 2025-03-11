@@ -9,7 +9,7 @@ import {
   RepeatGridIcon,
   RepeatColumnIcon,
   RepeatRowIcon,
-  CrossSmallIcon,
+  XSmallIcon,
 } from "@webstudio-is/icons";
 import { type StyleValue, toValue } from "@webstudio-is/css-engine";
 import {
@@ -59,11 +59,11 @@ const Spacer = styled("div", {
 });
 
 const BackgroundRepeat = ({ index }: { index: number }) => {
-  const styleDecl = useComputedStyleDecl("backgroundRepeat");
+  const styleDecl = useComputedStyleDecl("background-repeat");
   const value = getRepeatedStyleItem(styleDecl, index);
   const items = [
     {
-      child: <CrossSmallIcon />,
+      child: <XSmallIcon />,
       description:
         "This value indicates that the background image will not be repeated and will appear only once.",
       value: "no-repeat",
@@ -112,7 +112,7 @@ const BackgroundRepeat = ({ index }: { index: number }) => {
           label="Background Repeat"
           code={`background-repeat: ${item.value};`}
           description={item.description}
-          properties={["backgroundRepeat"]}
+          properties={["background-repeat"]}
         >
           <ToggleGroupButton
             value={item.value}
@@ -132,7 +132,7 @@ const BackgroundRepeat = ({ index }: { index: number }) => {
 };
 
 const BackgroundAttachment = ({ index }: { index: number }) => {
-  const styleDecl = useComputedStyleDecl("backgroundAttachment");
+  const styleDecl = useComputedStyleDecl("background-attachment");
   const value = getRepeatedStyleItem(styleDecl, index);
   return (
     <ToggleGroup
@@ -153,7 +153,7 @@ const BackgroundAttachment = ({ index }: { index: number }) => {
 };
 
 export const BackgroundContent = ({ index }: { index: number }) => {
-  const backgroundImage = useComputedStyleDecl("backgroundImage");
+  const backgroundImage = useComputedStyleDecl("background-image");
 
   const elementRef = useRef<HTMLDivElement>(null);
   const [imageGradientToggle, setImageGradientToggle] = useState<
@@ -204,11 +204,11 @@ export const BackgroundContent = ({ index }: { index: number }) => {
                 <PropertyInlineLabel
                   label="Image"
                   description={propertyDescriptions.backgroundImage}
-                  properties={["backgroundImage"]}
+                  properties={["background-image"]}
                 />
               </Flex>
               <FloatingPanelProvider container={elementRef}>
-                <ImageControl property="backgroundImage" index={index} />
+                <ImageControl property="background-image" index={index} />
               </FloatingPanelProvider>
             </>
           )}
@@ -216,16 +216,16 @@ export const BackgroundContent = ({ index }: { index: number }) => {
           <PropertyInlineLabel
             label="Clip"
             description={propertyDescriptions.backgroundClip}
-            properties={["backgroundClip"]}
+            properties={["background-clip"]}
           />
-          <SelectControl property="backgroundClip" index={index} />
+          <SelectControl property="background-clip" index={index} />
 
           <PropertyInlineLabel
             label="Origin"
             description={propertyDescriptions.backgroundOrigin}
-            properties={["backgroundOrigin"]}
+            properties={["background-origin"]}
           />
-          <SelectControl property="backgroundOrigin" index={index} />
+          <SelectControl property="background-origin" index={index} />
         </Grid>
 
         <Spacer />
@@ -249,7 +249,7 @@ export const BackgroundContent = ({ index }: { index: number }) => {
               <PropertyInlineLabel
                 label="Repeat"
                 description={propertyDescriptions.backgroundRepeat}
-                properties={["backgroundRepeat"]}
+                properties={["background-repeat"]}
               />
               <Flex css={{ justifySelf: "end" }}>
                 <BackgroundRepeat index={index} />
@@ -260,7 +260,7 @@ export const BackgroundContent = ({ index }: { index: number }) => {
           <PropertyInlineLabel
             label="Attachment"
             description={propertyDescriptions.backgroundAttachment}
-            properties={["backgroundAttachment"]}
+            properties={["background-attachment"]}
           />
           <Flex css={{ justifySelf: "end" }}>
             <BackgroundAttachment index={index} />
@@ -269,9 +269,9 @@ export const BackgroundContent = ({ index }: { index: number }) => {
           <PropertyInlineLabel
             label="Blend mode"
             description={propertyDescriptions.backgroundBlendMode}
-            properties={["backgroundBlendMode"]}
+            properties={["background-blend-mode"]}
           />
-          <SelectControl property="backgroundBlendMode" index={index} />
+          <SelectControl property="background-blend-mode" index={index} />
         </Grid>
       </BackgroundSection>
       <Separator css={{ gridColumn: "span 2" }} />

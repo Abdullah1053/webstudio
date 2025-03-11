@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import path, { resolve } from "node:path";
 import { defineConfig, type CorsOptions } from "vite";
 import { vitePlugin as remix } from "@remix-run/dev";
 import { vercelPreset } from "@vercel/remix/vite";
@@ -9,13 +9,25 @@ import {
   getAuthorizationServerOrigin,
   isBuilderUrl,
 } from "./app/shared/router-utils/origins";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
+import fg from "fast-glob";
+
+const rootDir = ["..", "../..", "../../.."]
+  .map((dir) => path.join(__dirname, dir))
+  .find((dir) => existsSync(path.join(dir, ".git")));
+
+const hasPrivateFolders =
+  fg.sync([path.join(rootDir ?? "", "packages/*/private-src/*")], {
+    ignore: ["**/node_modules/**"],
+  }).length > 0;
 
 export default defineConfig(({ mode }) => {
   if (mode === "test") {
     return {
       resolve: {
-        conditions: ["webstudio"],
+        conditions: hasPrivateFolders
+          ? ["webstudio-private", "webstudio"]
+          : ["webstudio"],
         alias: [
           {
             find: "~",
@@ -36,6 +48,13 @@ export default defineConfig(({ mode }) => {
     plugins: [
       remix({
         presets: [vercelPreset()],
+        future: {
+          v3_lazyRouteDiscovery: false,
+          v3_relativeSplatPath: false,
+          v3_singleFetch: false,
+          v3_fetcherPersist: false,
+          v3_throwAbortReason: false,
+        },
       }),
       {
         name: "request-timing-logger",
@@ -62,7 +81,10 @@ export default defineConfig(({ mode }) => {
       },
     ],
     resolve: {
-      conditions: ["webstudio"],
+      conditions: hasPrivateFolders
+        ? ["webstudio-private", "webstudio"]
+        : ["webstudio"],
+
       alias: [
         {
           find: "~",

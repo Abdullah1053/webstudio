@@ -5,8 +5,8 @@ import {
   Instances,
   ROOT_INSTANCE_ID,
   type Page,
+  rootComponent,
 } from "@webstudio-is/sdk";
-import { rootComponent } from "@webstudio-is/react-sdk";
 import { $pages } from "./nano-states/pages";
 import { $instances, $selectedInstanceSelector } from "./nano-states/instances";
 
@@ -72,28 +72,41 @@ export const getInstanceKey = <
 ): (InstanceSelector extends undefined ? undefined : never) | string =>
   JSON.stringify(instanceSelector);
 
+export const $selectedInstanceKeyWithRoot = computed(
+  $awareness,
+  (awareness) => {
+    const instanceSelector = awareness?.instanceSelector;
+    if (instanceSelector) {
+      if (instanceSelector[0] === ROOT_INSTANCE_ID) {
+        return getInstanceKey(instanceSelector);
+      }
+      return getInstanceKey([...instanceSelector, ROOT_INSTANCE_ID]);
+    }
+  }
+);
+
 export const $selectedInstanceKey = computed($awareness, (awareness) =>
   getInstanceKey(awareness?.instanceSelector)
 );
 
-type InstancePath = Array<{
+export type InstancePath = Array<{
   instance: Instance;
   instanceSelector: string[];
 }>;
 
-const getInstancePath = (
+export const getInstancePath = (
+  instanceSelector: string[],
   instances: Instances,
-  virtualInstances: Instances,
-  temporaryInstances: Instances,
-  instanceSelector: string[]
+  virtualInstances?: Instances,
+  temporaryInstances?: Instances
 ): InstancePath => {
   const instancePath: InstancePath = [];
   for (let index = 0; index < instanceSelector.length; index += 1) {
     const instanceId = instanceSelector[index];
     const instance =
       instances.get(instanceId) ??
-      virtualInstances.get(instanceId) ??
-      temporaryInstances.get(instanceId);
+      virtualInstances?.get(instanceId) ??
+      temporaryInstances?.get(instanceId);
     // collection item can be undefined
     if (instance === undefined) {
       continue;
@@ -114,10 +127,30 @@ export const $selectedInstancePath = computed(
       return;
     }
     return getInstancePath(
+      instanceSelector,
       instances,
       virtualInstances,
-      temporaryInstances,
-      instanceSelector
+      temporaryInstances
+    );
+  }
+);
+
+export const $selectedInstancePathWithRoot = computed(
+  [$instances, $virtualInstances, $temporaryInstances, $awareness],
+  (instances, virtualInstances, temporaryInstances, awareness) => {
+    let instanceSelector = awareness?.instanceSelector;
+    if (instanceSelector === undefined) {
+      return;
+    }
+    // add root as ancestor when root is not selected
+    if (instanceSelector[0] !== ROOT_INSTANCE_ID) {
+      instanceSelector = [...instanceSelector, ROOT_INSTANCE_ID];
+    }
+    return getInstancePath(
+      instanceSelector,
+      instances,
+      virtualInstances,
+      temporaryInstances
     );
   }
 );

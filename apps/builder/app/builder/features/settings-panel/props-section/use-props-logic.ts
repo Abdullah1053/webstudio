@@ -1,13 +1,9 @@
 import { nanoid } from "nanoid";
-import type { Instance, Prop } from "@webstudio-is/sdk";
-import {
-  type PropMeta,
-  showAttribute,
-  textContentAttribute,
-  collectionComponent,
-} from "@webstudio-is/react-sdk";
-import type { PropValue } from "../shared";
 import { useStore } from "@nanostores/react";
+import type { PropMeta, Instance, Prop } from "@webstudio-is/sdk";
+import { collectionComponent, descendantComponent } from "@webstudio-is/sdk";
+import { showAttribute, textContentAttribute } from "@webstudio-is/react-sdk";
+import type { PropValue } from "../shared";
 import {
   $isContentMode,
   $registeredComponentMetas,
@@ -96,6 +92,13 @@ const getDefaultMetaForType = (type: Prop["type"]): PropMeta => {
       throw new Error(
         "A prop with type string[] must have a meta, we can't provide a default one because we need a list of options"
       );
+
+    case "animationAction":
+      return {
+        type: "animationAction",
+        control: "animationAction",
+        required: false,
+      };
     case "json":
       throw new Error(
         "A prop with type json must have a meta, we can't provide a default one because we need a list of options"
@@ -195,19 +198,32 @@ export const usePropsLogic = ({
 
   const initialPropsNames = new Set(meta.initialProps ?? []);
 
-  const systemProps: PropAndMeta[] = systemPropsMeta.map(({ name, meta }) => {
-    let saved = getAndDelete<Prop>(unprocessedSaved, name);
-    if (saved === undefined && meta.defaultValue !== undefined) {
-      saved = getStartingProp(instance.id, meta, name);
-    }
-    getAndDelete(unprocessedKnown, name);
-    initialPropsNames.delete(name);
-    return {
-      prop: saved,
-      propName: name,
-      meta,
-    };
-  });
+  const systemProps: PropAndMeta[] = systemPropsMeta
+    .filter(({ name }) => {
+      // descendant component is not actually rendered
+      // but affects styling of nested elements
+      // hiding descendant does not hide nested elements and confuse users
+      if (
+        instance.component === descendantComponent &&
+        name === showAttribute
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .map(({ name, meta }) => {
+      let saved = getAndDelete<Prop>(unprocessedSaved, name);
+      if (saved === undefined && meta.defaultValue !== undefined) {
+        saved = getStartingProp(instance.id, meta, name);
+      }
+      getAndDelete(unprocessedKnown, name);
+      initialPropsNames.delete(name);
+      return {
+        prop: saved,
+        propName: name,
+        meta,
+      };
+    });
 
   const canHaveTextContent =
     instanceMeta?.type === "container" &&

@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid";
-import { blockTemplateComponent } from "@webstudio-is/react-sdk";
+import { blockTemplateComponent } from "@webstudio-is/sdk";
 import type { Instance } from "@webstudio-is/sdk";
 import { toast } from "@webstudio-is/design-system";
 import { createCommandsEmitter, type Command } from "~/shared/commands-emitter";
@@ -20,11 +20,9 @@ import {
 } from "~/shared/breakpoints";
 import {
   deleteInstanceMutable,
-  findAvailableDataSources,
   extractWebstudioFragment,
   insertWebstudioFragmentCopy,
   updateWebstudioData,
-  isInstanceDetachable,
 } from "~/shared/instance-utils";
 import type { InstanceSelector } from "~/shared/tree-utils";
 import { serverSyncStore } from "~/shared/sync";
@@ -38,11 +36,13 @@ import {
 import { $selectedInstancePath, selectInstance } from "~/shared/awareness";
 import { openCommandPanel } from "../features/command-panel";
 import { builderApi } from "~/shared/builder-api";
-
 import {
   findClosestNonTextualContainer,
+  isInstanceDetachable,
   isTreeMatching,
 } from "~/shared/matcher";
+import { getSetting, setSetting } from "./client-settings";
+import { findAvailableVariables } from "~/shared/data-variables";
 
 const makeBreakpointCommand = <CommandName extends string>(
   name: CommandName,
@@ -51,8 +51,7 @@ const makeBreakpointCommand = <CommandName extends string>(
   name,
   hidden: true,
   defaultHotkeys: [`${number}`],
-  disableHotkeyOnFormTags: true,
-  disableHotkeyOnContentEditable: true,
+  disableOnInputLikeControls: true,
   handler: () => {
     selectBreakpointByOrder(number);
   },
@@ -60,7 +59,6 @@ const makeBreakpointCommand = <CommandName extends string>(
 
 export const deleteSelectedInstance = () => {
   if ($isPreviewMode.get()) {
-    builderApi.toast.info("Deleting is not allowed in preview mode.");
     return;
   }
   const textEditingInstanceSelector = $textEditingInstanceSelector.get();
@@ -75,7 +73,14 @@ export const deleteSelectedInstance = () => {
   const [selectedItem, parentItem] = instancePath;
   const selectedInstanceSelector = selectedItem.instanceSelector;
   const instances = $instances.get();
-  if (isInstanceDetachable(instances, selectedInstanceSelector) === false) {
+  const metas = $registeredComponentMetas.get();
+  if (
+    isInstanceDetachable({
+      metas,
+      instances,
+      instanceSelector: selectedInstanceSelector,
+    }) === false
+  ) {
     toast.error(
       "This instance can not be moved outside of its parent component."
     );
@@ -127,7 +132,7 @@ export const deleteSelectedInstance = () => {
     newSelectedInstanceSelector = parentInstanceSelector;
   }
   updateWebstudioData((data) => {
-    if (deleteInstanceMutable(data, selectedInstanceSelector)) {
+    if (deleteInstanceMutable(data, instancePath)) {
       selectInstance(newSelectedInstanceSelector);
     }
   });
@@ -299,6 +304,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       handler: () => {
         $publishDialog.set("publish");
       },
+      disableOnInputLikeControls: true,
     },
     {
       name: "openExportDialog",
@@ -306,6 +312,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       handler: () => {
         $publishDialog.set("export");
       },
+      disableOnInputLikeControls: true,
     },
     {
       name: "toggleComponentsPanel",
@@ -319,8 +326,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
         }
         toggleActiveSidebarPanel("components");
       },
-      disableHotkeyOnFormTags: true,
-      disableHotkeyOnContentEditable: true,
+      disableOnInputLikeControls: true,
     },
     {
       name: "toggleNavigatorPanel",
@@ -328,8 +334,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       handler: () => {
         toggleActiveSidebarPanel("navigator");
       },
-      disableHotkeyOnFormTags: true,
-      disableHotkeyOnContentEditable: true,
+      disableOnInputLikeControls: true,
     },
     {
       name: "openStylePanel",
@@ -343,8 +348,29 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
         }
         $activeInspectorPanel.set("style");
       },
-      disableHotkeyOnFormTags: true,
-      disableHotkeyOnContentEditable: true,
+      disableOnInputLikeControls: true,
+    },
+    {
+      name: "toggleStylePanelFocusMode",
+      defaultHotkeys: ["alt+shift+s"],
+      handler: () => {
+        setSetting(
+          "stylePanelMode",
+          getSetting("stylePanelMode") === "focus" ? "default" : "focus"
+        );
+      },
+      disableOnInputLikeControls: true,
+    },
+    {
+      name: "toggleStylePanelAdvancedMode",
+      defaultHotkeys: ["alt+shift+a"],
+      handler: () => {
+        setSetting(
+          "stylePanelMode",
+          getSetting("stylePanelMode") === "advanced" ? "default" : "advanced"
+        );
+      },
+      disableOnInputLikeControls: true,
     },
     {
       name: "openSettingsPanel",
@@ -352,8 +378,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       handler: () => {
         $activeInspectorPanel.set("settings");
       },
-      disableHotkeyOnFormTags: true,
-      disableHotkeyOnContentEditable: true,
+      disableOnInputLikeControls: true,
     },
     makeBreakpointCommand("selectBreakpoint1", 1),
     makeBreakpointCommand("selectBreakpoint2", 2),
@@ -369,25 +394,21 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
     {
       name: "toggleAiCommandBar",
       defaultHotkeys: ["space"],
-      disableHotkeyOnContentEditable: true,
       // this disables hotkey for inputs on style panel
       // but still work for input on canvas which call event.preventDefault() in keydown handler
-      disableHotkeyOnFormTags: true,
+      disableOnInputLikeControls: true,
       handler: () => {
         $isAiCommandBarVisible.set($isAiCommandBarVisible.get() === false);
       },
     },
     */
 
-    // instances
-
     {
-      name: "deleteInstance",
+      name: "deleteInstanceBuilder",
       defaultHotkeys: ["backspace", "delete"],
-      disableHotkeyOnContentEditable: true,
-      // this disables hotkey for inputs on style panel
-      // but still work for input on canvas which call event.preventDefault() in keydown handler
-      disableHotkeyOnFormTags: true,
+      // See "deleteInstanceCanvas" for details on why the command is separated for the canvas and builder.
+      disableHotkeyOutsideApp: true,
+      disableOnInputLikeControls: true,
       handler: deleteSelectedInstance,
     },
     {
@@ -413,11 +434,10 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
           const { newInstanceIds } = insertWebstudioFragmentCopy({
             data,
             fragment,
-            availableDataSources: findAvailableDataSources(
-              data.dataSources,
-              data.instances,
-              parentItem.instanceSelector
-            ),
+            availableVariables: findAvailableVariables({
+              ...data,
+              startingInstanceId: parentItem.instanceSelector[0],
+            }),
           });
           const newRootInstanceId = newInstanceIds.get(
             selectedItem.instance.id
@@ -475,8 +495,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       name: "undo",
       // safari use cmd+z to reopen closed tabs, here added ctrl as alternative
       defaultHotkeys: ["meta+z", "ctrl+z"],
-      disableHotkeyOnContentEditable: true,
-      disableHotkeyOnFormTags: true,
+      disableOnInputLikeControls: true,
       handler: () => {
         serverSyncStore.undo();
       },
@@ -485,8 +504,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       name: "redo",
       // safari use cmd+z to reopen closed tabs, here added ctrl as alternative
       defaultHotkeys: ["meta+shift+z", "ctrl+shift+z"],
-      disableHotkeyOnContentEditable: true,
-      disableHotkeyOnFormTags: true,
+      disableOnInputLikeControls: true,
       handler: () => {
         serverSyncStore.redo();
       },
@@ -497,7 +515,9 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
       hidden: true,
       defaultHotkeys: ["meta+k", "ctrl+k"],
       handler: () => {
-        openCommandPanel();
+        if ($isDesignMode.get()) {
+          openCommandPanel();
+        }
       },
     },
   ],

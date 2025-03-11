@@ -19,18 +19,20 @@ import {
   TreeSortableItem,
   type TreeDropTarget,
 } from "@webstudio-is/design-system";
+import { showAttribute } from "@webstudio-is/react-sdk";
 import {
+  ROOT_INSTANCE_ID,
   collectionComponent,
   blockComponent,
   rootComponent,
-  showAttribute,
-  WsComponentMeta,
   blockTemplateComponent,
-} from "@webstudio-is/react-sdk";
-import { ROOT_INSTANCE_ID, type Instance } from "@webstudio-is/sdk";
+  descendantComponent,
+  type Instance,
+  type WsComponentMeta,
+} from "@webstudio-is/sdk";
 import {
-  EyeconClosedIcon,
-  EyeconOpenIcon,
+  EyeClosedIcon,
+  EyeOpenIcon,
   InfoCircleIcon,
 } from "@webstudio-is/icons";
 import {
@@ -281,22 +283,28 @@ const handleExpand = (item: TreeItem, isExpanded: boolean, all: boolean) => {
 };
 
 const ShowToggle = ({
-  instanceId,
+  instance,
   value,
 }: {
-  instanceId: Instance["id"];
+  instance: Instance;
   value: boolean;
 }) => {
+  // descendant component is not actually rendered
+  // but affects styling of nested elements
+  // hiding descendant does not hide nested elements and confuse users
+  if (instance.component === descendantComponent) {
+    return;
+  }
   const toggleShow = () => {
     const newValue = value === false;
     serverSyncStore.createTransaction([$props], (props) => {
       const { propsByInstanceId } = $propsIndex.get();
-      const instanceProps = propsByInstanceId.get(instanceId);
+      const instanceProps = propsByInstanceId.get(instance.id);
       let showProp = instanceProps?.find((prop) => prop.name === showAttribute);
       if (showProp === undefined) {
         showProp = {
           id: nanoid(),
-          instanceId,
+          instanceId: instance.id,
           name: showAttribute,
           type: "boolean",
           value: newValue,
@@ -318,7 +326,7 @@ const ShowToggle = ({
         tabIndex={-1}
         aria-label="Show"
         onClick={toggleShow}
-        icon={value ? <EyeconOpenIcon /> : <EyeconClosedIcon />}
+        icon={value ? <EyeOpenIcon /> : <EyeClosedIcon />}
       />
     </Tooltip>
   );
@@ -430,6 +438,16 @@ const getBuilderDropTarget = (
 };
 
 const canDrag = (instance: Instance, instanceSelector: InstanceSelector) => {
+  // forbid moving root instance
+  if (instanceSelector.length === 1) {
+    return false;
+  }
+
+  // Do not drag if the instance name is being edited
+  if ($editingItemSelector.get()?.join(",") === instanceSelector.join(",")) {
+    return false;
+  }
+
   if ($isContentMode.get()) {
     const parentId = instanceSelector[1];
     const parentInstance = $instances.get().get(parentId);
@@ -530,6 +548,20 @@ export const NavigatorTree = () => {
     }
   }, [selectedInstanceSelector]);
 
+  const selectInstanceAndClearSelection = (
+    instanceSelector: undefined | Instance["id"][],
+    event: React.MouseEvent | React.FocusEvent
+  ) => {
+    if (event.currentTarget.querySelector("[contenteditable]") === null) {
+      // Allow text selection and edits inside current TreeNode
+      // Outside if text is selected, it needs to be unselected before selecting the instance.
+      // Otherwise user will cmd+c the text instead of copying the instance.
+      window.getSelection()?.removeAllRanges();
+    }
+
+    selectInstance(instanceSelector);
+  };
+
   return (
     <ScrollArea
       direction="both"
@@ -546,8 +578,10 @@ export const NavigatorTree = () => {
             level={0}
             isSelected={selectedKey === ROOT_INSTANCE_ID}
             buttonProps={{
-              onClick: () => selectInstance([ROOT_INSTANCE_ID]),
-              onFocus: () => selectInstance([ROOT_INSTANCE_ID]),
+              onClick: (event) =>
+                selectInstanceAndClearSelection([ROOT_INSTANCE_ID], event),
+              onFocus: (event) =>
+                selectInstanceAndClearSelection([ROOT_INSTANCE_ID], event),
             }}
             action={
               <Tooltip
@@ -652,17 +686,17 @@ export const NavigatorTree = () => {
                     $blockChildOutline.set(undefined);
                   },
                   onMouseLeave: () => $hoveredInstanceSelector.set(undefined),
-                  onClick: () => selectInstance(item.selector),
-                  onFocus: () => selectInstance(item.selector),
+                  onClick: (event) =>
+                    selectInstanceAndClearSelection(item.selector, event),
+                  onFocus: (event) =>
+                    selectInstanceAndClearSelection(item.selector, event),
                   onKeyDown: (event) => {
                     if (event.key === "Enter") {
                       emitCommand("editInstanceText");
                     }
                   },
                 }}
-                action={
-                  <ShowToggle instanceId={item.instance.id} value={show} />
-                }
+                action={<ShowToggle instance={item.instance} value={show} />}
               >
                 <TreeNodeContent
                   meta={meta}

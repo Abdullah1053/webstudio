@@ -1,5 +1,5 @@
 import { type ReactNode } from "react";
-import type { StyleProperty } from "@webstudio-is/css-engine";
+import type { CssProperty } from "@webstudio-is/css-engine";
 import { toValue } from "@webstudio-is/css-engine";
 import { Box, Grid, ToggleButton } from "@webstudio-is/design-system";
 import { CssValueInputContainer } from "../../shared/css-value-input";
@@ -25,14 +25,14 @@ export const BorderProperty = ({
 }: {
   individualModeIcon?: ReactNode;
   borderPropertyOptions: Partial<{
-    [property in StyleProperty]: { icon?: ReactNode };
+    [property in CssProperty]: { icon?: ReactNode };
   }>;
   label: string;
   description: string;
 }) => {
   const borderProperties = Object.keys(borderPropertyOptions) as [
-    StyleProperty,
-    ...StyleProperty[],
+    CssProperty,
+    ...CssProperty[],
   ];
   const styles = useComputedStyles(borderProperties);
   const styleValueSourceColor = getPriorityStyleValueSource(styles);
@@ -117,10 +117,8 @@ export const BorderProperty = ({
           {styles.map((styleDecl) => (
             <CssValueInputContainer
               key={styleDecl.property}
-              icon={
-                borderPropertyOptions[styleDecl.property as StyleProperty]?.icon
-              }
-              property={styleDecl.property as StyleProperty}
+              icon={borderPropertyOptions[styleDecl.property]?.icon}
+              property={styleDecl.property}
               styleSource={styleDecl.source.name}
               getOptions={() =>
                 styleConfigByName(firstPropertyName).items.map((item) => ({
@@ -129,7 +127,7 @@ export const BorderProperty = ({
                 }))
               }
               value={styleDecl.cascadedValue}
-              setValue={setProperty(styleDecl.property as StyleProperty)}
+              setValue={setProperty(styleDecl.property)}
               deleteProperty={deleteProperty}
             />
           ))}

@@ -5,8 +5,10 @@ import { AlertIcon, ResetIcon } from "@webstudio-is/icons";
 import {
   hyphenateProperty,
   toValue,
+  type CssProperty,
   type StyleProperty,
 } from "@webstudio-is/css-engine";
+import { propertiesData } from "@webstudio-is/css-data";
 import {
   Button,
   Flex,
@@ -35,7 +37,6 @@ import { useComputedStyles } from "./shared/model";
 import { StyleSourceBadge } from "./style-source";
 import { createBatchUpdate } from "./shared/use-style-data";
 import { $virtualInstances } from "~/shared/awareness";
-import { styleConfigByName } from "./shared/configs";
 
 const $isAltPressed = atom(false);
 if (typeof window !== "undefined") {
@@ -54,14 +55,13 @@ if (typeof window !== "undefined") {
 const renderCss = (styles: ComputedStyleDecl[], isComputed: boolean) => {
   let css = "";
   for (const styleDecl of styles) {
-    const property = hyphenateProperty(styleDecl.property);
     let value;
     if (isComputed) {
       value = toValue(styleDecl.usedValue);
     } else {
       value = toValue(styleDecl.cascadedValue);
     }
-    css += `${property}: ${value};\n`;
+    css += `${styleDecl.property}: ${value};\n`;
   }
   return css;
 };
@@ -73,6 +73,7 @@ export const PropertyInfo = ({
   description,
   styles,
   onReset,
+  resetType = "reset",
 }: {
   title: string;
   code?: string;
@@ -80,6 +81,7 @@ export const PropertyInfo = ({
   description: ReactNode;
   styles: ComputedStyleDecl[];
   onReset: () => void;
+  resetType?: "reset" | "delete";
 }) => {
   const breakpoints = useStore($breakpoints);
   const instances = useStore($instances);
@@ -199,13 +201,11 @@ export const PropertyInfo = ({
               <ResetIcon />
             </Flex>
           }
-          suffix={<Kbd value={["option", "click"]} color="moreSubtle" />}
+          suffix={<Kbd value={["alt", "click"]} color="moreSubtle" />}
           css={{ gridTemplateColumns: "1fr max-content 1fr" }}
           onClick={onReset}
         >
-          {styles[0].property.startsWith("--")
-            ? "Delete variable"
-            : "Reset value"}
+          {resetType === "delete" ? "Delete property" : "Reset value"}
         </Button>
       )}
     </Flex>
@@ -238,7 +238,7 @@ export const PropertyLabel = ({
 }: {
   label: string;
   description?: string;
-  properties: [StyleProperty, ...StyleProperty[]];
+  properties: [StyleProperty | CssProperty, ...(StyleProperty | CssProperty)[]];
 }) => {
   const styles = useComputedStyles(properties);
   const styleValueSourceColor = getPriorityStyleValueSource(styles);
@@ -250,15 +250,12 @@ export const PropertyLabel = ({
     }
     batch.publish();
   };
-  const styleConfig = styleConfigByName(properties[0]);
 
   return (
     <Flex align="center">
       <Tooltip
         open={isOpen}
         onOpenChange={setIsOpen}
-        // prevent closing tooltip on content click
-        onPointerDown={(event) => event.preventDefault()}
         triggerProps={{
           onClick: (event) => {
             if (event.altKey) {
@@ -282,7 +279,7 @@ export const PropertyLabel = ({
               resetProperty();
               setIsOpen(false);
             }}
-            link={styleConfig?.mdnUrl}
+            link={propertiesData[hyphenateProperty(properties[0])]?.mdnUrl}
           />
         }
       >
@@ -303,7 +300,7 @@ export const PropertySectionLabel = ({
 }: {
   label: string;
   description: string | undefined;
-  properties: [StyleProperty, ...StyleProperty[]];
+  properties: [StyleProperty | CssProperty, ...(StyleProperty | CssProperty)[]];
 }) => {
   const styles = useComputedStyles(properties);
   const styleValueSourceColor = getPriorityStyleValueSource(styles);
@@ -315,7 +312,6 @@ export const PropertySectionLabel = ({
     }
     batch.publish();
   };
-  const styleConfig = styleConfigByName(properties[0]);
 
   return (
     <Flex align="center">
@@ -343,7 +339,7 @@ export const PropertySectionLabel = ({
               resetProperty();
               setIsOpen(false);
             }}
-            link={styleConfig?.mdnUrl}
+            link={propertiesData[hyphenateProperty(properties[0])]?.mdnUrl}
           />
         }
       >
@@ -373,7 +369,10 @@ export const PropertyInlineLabel = ({
   label: string;
   title?: string;
   description?: string;
-  properties?: [StyleProperty, ...StyleProperty[]];
+  properties?: [
+    StyleProperty | CssProperty,
+    ...(StyleProperty | CssProperty)[],
+  ];
   disabled?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -429,7 +428,7 @@ export const PropertyValueTooltip = ({
 }: {
   label: string;
   description: string | undefined;
-  properties: [StyleProperty, ...StyleProperty[]];
+  properties: [StyleProperty | CssProperty, ...(StyleProperty | CssProperty)[]];
   isAdvanced?: boolean;
   children: ReactNode;
 }) => {
@@ -442,7 +441,6 @@ export const PropertyValueTooltip = ({
     }
     batch.publish();
   };
-  const styleConfig = styleConfigByName(properties[0]);
 
   return (
     <Tooltip
@@ -478,7 +476,7 @@ export const PropertyValueTooltip = ({
             resetProperty();
             setIsOpen(false);
           }}
-          link={styleConfig?.mdnUrl}
+          link={propertiesData[hyphenateProperty(properties[0])]?.mdnUrl}
         />
       }
     >

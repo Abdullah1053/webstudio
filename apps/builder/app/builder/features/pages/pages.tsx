@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { useStore } from "@nanostores/react";
 import {
   Tooltip,
-  Box,
   Button,
   SmallIconButton,
   TreeNode,
@@ -13,6 +12,7 @@ import {
   TreeSortableItem,
   type TreeDropTarget,
   toast,
+  ScrollArea,
 } from "@webstudio-is/design-system";
 import {
   ChevronRightIcon,
@@ -23,7 +23,7 @@ import {
   NewPageIcon,
   PageIcon,
   DynamicPageIcon,
-  CrossIcon,
+  XIcon,
 } from "@webstudio-is/icons";
 import { ExtendedPanel } from "../../shared/extended-sidebar-panel";
 import { NewPageSettings, PageSettings } from "./page-settings";
@@ -313,7 +313,15 @@ const PagesTree = ({
   }
 
   return (
-    <Box css={{ overflowY: "auto", flexBasis: 0, flexGrow: 1 }}>
+    <ScrollArea
+      direction="both"
+      css={{
+        width: "100%",
+        overflow: "hidden",
+        flexBasis: 0,
+        flexGrow: 1,
+      }}
+    >
       <TreeRoot>
         {flatPagesTree.map((item, index) => {
           const handleExpand = (isExpanded: boolean, all: boolean) => {
@@ -435,7 +443,7 @@ const PagesTree = ({
           );
         })}
       </TreeRoot>
-    </Box>
+    </ScrollArea>
   );
 };
 
@@ -558,7 +566,7 @@ export const PagesPanel = ({ onClose }: { onClose: () => void }) => {
             <Tooltip content="Close panel" side="bottom">
               <Button
                 color="ghost"
-                prefix={<CrossIcon />}
+                prefix={<XIcon />}
                 aria-label="Close panel"
                 onClick={onClose}
               />

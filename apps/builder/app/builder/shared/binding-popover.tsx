@@ -8,6 +8,7 @@ import {
   createContext,
   type ReactNode,
 } from "react";
+import { useStore } from "@nanostores/react";
 import {
   DotIcon,
   InfoCircleIcon,
@@ -37,17 +38,16 @@ import {
   getExpressionIdentifiers,
   lintExpression,
 } from "@webstudio-is/sdk";
+import { $dataSourceVariables, $isDesignMode } from "~/shared/nano-states";
+import {
+  computeExpression,
+  encodeDataVariableName,
+} from "~/shared/data-variables";
 import {
   ExpressionEditor,
   formatValuePreview,
   type EditorApi,
 } from "./expression-editor";
-import {
-  $dataSourceVariables,
-  $isDesignMode,
-  computeExpression,
-} from "~/shared/nano-states";
-import { useStore } from "@nanostores/react";
 
 export const evaluateExpressionWithinScope = (
   expression: string,
@@ -94,7 +94,9 @@ const BindingPanel = ({
       expression,
       availableVariables: new Set(aliases.keys()),
     });
-    setErrorsCount(diagnostics.length);
+    // prevent saving expression only with syntax error
+    const errors = diagnostics.filter((item) => item.severity === "error");
+    setErrorsCount(errors.length);
   };
 
   const updateExpression = (newExpression: string) => {
@@ -147,7 +149,10 @@ const BindingPanel = ({
                 active={usedIdentifiers.has(identifier)}
                 // convert variable to expression
                 onClick={() => {
-                  editorApiRef.current?.replaceSelection(identifier);
+                  if (name) {
+                    const nameIdentifier = encodeDataVariableName(name);
+                    editorApiRef.current?.replaceSelection(nameIdentifier);
+                  }
                 }}
                 // expression editor blur is fired after pointer down even
                 // preventing it allows to not trigger validation
@@ -314,14 +319,12 @@ const BindingButton = forwardRef<
             data-variant={error ? "error" : variant}
           >
             <DotIcon
-              size={14}
-              fill="white"
-              style={{ display: `var(--dot-display)` }}
+              size={7}
+              style={{ display: `var(--dot-display)`, color: "white" }}
             />
             <PlusIcon
-              size={10}
-              fill="white"
-              style={{ display: `var(--plus-display)` }}
+              size={8}
+              style={{ display: `var(--plus-display)`, color: "white" }}
             />
           </Box>
         }
@@ -367,7 +370,7 @@ export const BindingPopover = ({
   const valueError = validate?.(evaluateExpressionWithinScope(value, scope));
   return (
     <FloatingPanel
-      placement="right-start"
+      placement="left-start"
       open={isOpen}
       onOpenChange={(newOpen) => {
         // handle special case for popover close

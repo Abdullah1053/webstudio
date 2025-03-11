@@ -34,9 +34,9 @@ const shouldHideDot = ({
 
 export const FlexGrid = () => {
   const styles = useComputedStyles([
-    "flexDirection",
-    "justifyContent",
-    "alignItems",
+    "flex-direction",
+    "justify-content",
+    "align-items",
   ]);
   const styleValueSourceColor = getPriorityStyleValueSource(styles);
   const [flexDirection, justifyContent, alignItems] = styles;
@@ -49,18 +49,14 @@ export const FlexGrid = () => {
     flexDirectionValue === "column" || flexDirectionValue === "column-reverse";
 
   let color = theme.colors.foregroundFlexUiMain;
-  let borderColor = theme.colors.foregroundFlexUiMain;
 
   if (styleValueSourceColor === "local") {
-    borderColor = theme.colors.borderLocalMain;
     color = theme.colors.foregroundLocalFlexUi;
   }
   if (styleValueSourceColor === "overwritten") {
-    borderColor = theme.colors.borderOverwrittenFlexUi;
     color = theme.colors.foregroundOverwrittenFlexUi;
   }
   if (styleValueSourceColor === "remote") {
-    borderColor = theme.colors.borderRemoteFlexUi;
     color = theme.colors.foregroundRemoteFlexUi;
   }
 
@@ -77,9 +73,8 @@ export const FlexGrid = () => {
     <Grid
       tabIndex={0}
       css={{
-        padding: theme.spacing[2],
+        padding: theme.spacing[3],
         borderRadius: theme.borderRadius[4],
-        outline: `1px solid ${borderColor}`,
         background: theme.colors.backgroundControls,
         alignItems: "center",
         gap: 0,
@@ -120,8 +115,7 @@ export const FlexGrid = () => {
                 minWidth: "auto",
                 color: theme.colors.foregroundFlexUiMain,
                 "&:hover": {
-                  // @todo not clear which token to use here
-                  background: theme.colors.backgroundHover,
+                  background: theme.colors.foregroundFlexUiHover,
                 },
                 "&:focus": {
                   background: "none",
@@ -133,11 +127,11 @@ export const FlexGrid = () => {
                 const justifyContent = alignment[x];
                 const alignItems = alignment[y];
                 const batch = createBatchUpdate();
-                batch.setProperty("alignItems")({
+                batch.setProperty("align-items")({
                   type: "keyword",
                   value: alignItems,
                 });
-                batch.setProperty("justifyContent")({
+                batch.setProperty("justify-content")({
                   type: "keyword",
                   value: justifyContent,
                 });
@@ -149,7 +143,11 @@ export const FlexGrid = () => {
                 y,
                 justifyContent: justifyContentValue,
                 alignItems: alignItemsValue,
-              }) === false && <DotIcon />}
+              }) === false && (
+                <Box css={{ size: 16 }}>
+                  <DotIcon size={8} />
+                </Box>
+              )}
             </IconButton>
           </Flex>
         );

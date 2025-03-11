@@ -7,19 +7,19 @@ import {
   FloatingPanel,
 } from "@webstudio-is/design-system";
 import { toValue } from "@webstudio-is/css-engine";
-import type { StyleProperty } from "@webstudio-is/css-engine";
+import type { CssProperty } from "@webstudio-is/css-engine";
 import {
   ToggleGroupControl,
   ToggleGroupTooltip,
 } from "../../controls/toggle-group/toggle-group-control";
 import { TextControl } from "../../controls";
 import {
-  SmallXIcon,
-  ASStartIcon,
-  ASEndIcon,
-  ASCenterIcon,
-  ASBaselineIcon,
-  ASStretchIcon,
+  XSmallIcon,
+  AlignSelfStartIcon,
+  AlignSelfEndIcon,
+  AlignSelfCenterIcon,
+  AlignSelfBaselineIcon,
+  AlignSelfStretchIcon,
   ShrinkIcon,
   GrowIcon,
   OrderFirstIcon,
@@ -37,12 +37,12 @@ import { useComputedStyleDecl, useComputedStyles } from "../../shared/model";
 import { createBatchUpdate, setProperty } from "../../shared/use-style-data";
 
 export const properties = [
-  "flexShrink",
-  "flexGrow",
-  "flexBasis",
-  "alignSelf",
+  "flex-shrink",
+  "flex-grow",
+  "flex-basis",
+  "align-self",
   "order",
-] satisfies [StyleProperty, ...StyleProperty[]];
+] satisfies [CssProperty, ...CssProperty[]];
 
 export const Section = () => {
   return (
@@ -62,42 +62,42 @@ const FlexChildSectionAlign = () => {
       <PropertyLabel
         label="Align"
         description={propertyDescriptions.alignSelf}
-        properties={["alignSelf"]}
+        properties={["align-self"]}
       />
       <ToggleGroupControl
         label="Align"
-        properties={["alignSelf"]}
+        properties={["align-self"]}
         items={[
           {
-            child: <SmallXIcon />,
+            child: <XSmallIcon />,
             description:
               "The element's alignment is determined by its parent's align-items property.",
             value: "auto",
           },
           {
-            child: <ASStartIcon />,
+            child: <AlignSelfStartIcon />,
             description:
               "The element is aligned at the start of the cross axis.",
             value: "flex-start",
           },
           {
-            child: <ASEndIcon />,
+            child: <AlignSelfEndIcon />,
             description: "The element is aligned at the end of the cross axis.",
             value: "flex-end",
           },
           {
-            child: <ASCenterIcon />,
+            child: <AlignSelfCenterIcon />,
             description: "The element is centered along the cross axis.",
             value: "center",
           },
           {
-            child: <ASStretchIcon />,
+            child: <AlignSelfStretchIcon />,
             description:
               "The element is stretched to fill the entire cross axis.",
             value: "stretch",
           },
           {
-            child: <ASBaselineIcon />,
+            child: <AlignSelfBaselineIcon />,
             description:
               "The element is aligned to the baseline of the parent.",
             value: "baseline",
@@ -122,7 +122,7 @@ const getSizingValue = (flexGrow: string, flexShrink: string) => {
 };
 
 const FlexChildSectionSizing = () => {
-  const styles = useComputedStyles(["flexGrow", "flexShrink", "flexBasis"]);
+  const styles = useComputedStyles(["flex-grow", "flex-shrink", "flex-basis"]);
   const [flexGrow, flexShrink, flexBasis] = styles;
   const styleValueSource = getPriorityStyleValueSource(styles);
   const selectedValue = getSizingValue(
@@ -131,7 +131,7 @@ const FlexChildSectionSizing = () => {
   );
   const items = [
     {
-      child: <SmallXIcon />,
+      child: <XSmallIcon />,
       description: "Don't grow or shrink",
       value: "none",
       codeLines: ["flex-grow: 0;", "flex-shrink: 0;"],
@@ -176,7 +176,7 @@ const FlexChildSectionSizing = () => {
       <PropertyLabel
         label="Sizing"
         description="Specifies the ability of a flex item to grow, shrink, or set its initial size within a flex container."
-        properties={["flexGrow", "flexShrink", "flexBasis"]}
+        properties={["flex-grow", "flex-shrink", "flex-basis"]}
       />
 
       {/* We don't support "flex" shorthand and
@@ -202,12 +202,12 @@ const FlexChildSectionSizing = () => {
             flexShrink = 1;
           }
           if (flexGrow !== undefined && flexShrink !== undefined) {
-            batch.setProperty("flexGrow")({
+            batch.setProperty("flex-grow")({
               type: "unit",
               value: flexGrow,
               unit: "number",
             });
-            batch.setProperty("flexShrink")({
+            batch.setProperty("flex-shrink")({
               type: "unit",
               value: flexShrink,
               unit: "number",
@@ -227,7 +227,7 @@ const FlexChildSectionSizing = () => {
             label="Sizing"
             code={item.codeLines.join("\n")}
             description={item.description}
-            properties={["flexGrow", "flexShrink", "flexBasis"]}
+            properties={["flex-grow", "flex-shrink", "flex-basis"]}
           >
             <ToggleGroupButton
               aria-checked={item.value === selectedValue}
@@ -263,27 +263,27 @@ const FlexChildSectionSizingPopover = () => {
         >
           <Grid css={{ gridTemplateColumns: "auto", gap: theme.spacing[3] }}>
             <PropertyLabel
-              properties={["flexGrow"]}
+              properties={["flex-grow"]}
               description={propertyDescriptions.flexGrow}
               label="Grow"
             />
-            <TextControl property="flexGrow" />
+            <TextControl property="flex-grow" />
           </Grid>
           <Grid css={{ gridTemplateColumns: "auto", gap: theme.spacing[3] }}>
             <PropertyLabel
               label="Shrink"
               description={propertyDescriptions.flexShrink}
-              properties={["flexShrink"]}
+              properties={["flex-shrink"]}
             />
-            <TextControl property="flexShrink" />
+            <TextControl property="flex-shrink" />
           </Grid>
           <Grid css={{ gridTemplateColumns: "auto", gap: theme.spacing[3] }}>
             <PropertyLabel
               label="Basis"
               description={propertyDescriptions.flexBasis}
-              properties={["flexBasis"]}
+              properties={["flex-basis"]}
             />
-            <TextControl property="flexBasis" />
+            <TextControl property="flex-basis" />
           </Grid>
         </Grid>
       }
@@ -300,7 +300,7 @@ const FlexChildSectionOrder = () => {
   const selectedValue = toValue(order.cascadedValue);
   const items = [
     {
-      child: <SmallXIcon />,
+      child: <XSmallIcon />,
       description: "Don't change",
       value: "0",
       code: "order: 0;",
@@ -367,7 +367,7 @@ const FlexChildSectionOrder = () => {
             label="Sizing"
             code={item.code}
             description={item.description}
-            properties={["flexGrow", "flexShrink", "flexBasis"]}
+            properties={["flex-grow", "flex-shrink", "flex-basis"]}
           >
             <ToggleGroupButton
               aria-checked={
